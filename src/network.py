@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import simpy
 from device import Host, Link, Router
 from packet import DataPacket

@@ -1,12 +1,14 @@
+from __future__ import division, print_function
 import simpy
 
 class Device(object):
     """docstring for Device"""
 
-    def __init__(self, dev_id):
+    def __init__(self, env, dev_id):
         super(Device, self).__init__()
+        self._env = env
         self._dev_id = dev_id
-        self._attachments = {}
+        self._ports = {}
         
     @property
     def dev_id(self):
@@ -23,17 +25,20 @@ class Device(object):
         """
         return self._max_degree
 
-    def attach(to):
+    def attach(to_dev):
         """Attach this device to another bidirectionally.
         """
-        for d0, d1 in ((self, to), (to, self)):
-            if d0.max_degree is None or len(d0._attachments) < d0.max_degree:
-                d0._attachments[d1.dev_id] = d1
+        for d0, d1 in ((self, to_dev), (to_dev, self)):
+            if d0.max_degree is None or len(d0._ports) < d0.max_degree:
+                d0._ports[d1._dev_id] = d1
             else:
                 # TODO: Define our own exception class
                 raise Exception('Too many attachments')
 
-    def receive(packet):
+    def send(packet, to_id):
+        self._ports[to].receive(packet, self._dev_id)
+
+    def receive(packet, from_id):
         raise NotImplementedError()
 
 class Host(Device):
@@ -41,8 +46,8 @@ class Host(Device):
 
     _max_degree = 1
 
-    def __init__(self, dev_id):
-        super(Host, self).__init__(dev_id)
+    def __init__(self, env, dev_id):
+        super(Host, self).__init__(env, dev_id)
 
     def receive(packet):
         packet.reach_host(self)
@@ -52,8 +57,8 @@ class Link(Device):
 
     _max_degree = 2
 
-    def __init__(self, dev_id, rate_mbps, delay_ms, buffer_kbyte):
-        super(Link, self).__init__(dev_id)
+    def __init__(self, env, dev_id, rate_mbps, delay_ms, buffer_kbyte):
+        super(Link, self).__init__(env, dev_id)
         self.rate_mbps = rate_mbps
         self.delay_ms = delay_ms
         self.buffer_kbyte = buffer_kbyte
@@ -67,8 +72,12 @@ class Router(Device):
 
     _max_degree = None
 
-    def __init__(self, dev_id):
-        super(Router, self).__init__(dev_id)
+    def __init__(self, env, dev_id):
+        super(Router, self).__init__(env, dev_id)
+        self._table = {}
+
+    def look_up(dest_id):
+        return self._table[dest]
 
     def receive(packet):
         packet.reach_router(self)
