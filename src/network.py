@@ -33,7 +33,8 @@ class Network(object):
             else:
                 arr = line.split()
                 f = Flow(self.env, arr[0], arr[1], arr[2], arr[3], arr[4])
-                self.flows.append(l)
+                self.flows.append(f)
+        f.close()
                 
 
     def __init__(self, env, filename):
