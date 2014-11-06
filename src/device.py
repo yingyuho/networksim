@@ -1,5 +1,21 @@
 from __future__ import division, print_function
+from functools import partial
 import simpy
+
+from simpy_ext import SizedStore
+
+class PacketBuffer(SizedStore):
+    """Specialized version of :class:`simpy_ext.SizedStore` for 
+    :class:`packet.Packet`.
+
+    The *env* parameter is the :class:`~simpy.core.Environment` instance the
+    container is bound to.
+
+    The *capacity* defines the size of the buffer in bytes.
+
+    """
+    def __init__(self, env, capacity):
+        super(PacketBuffer, self).__init__(env, capacity, attrgetter('size'))
 
 class Device(object):
     """docstring for Device"""
@@ -8,7 +24,8 @@ class Device(object):
         super(Device, self).__init__()
         self._env = env
         self._dev_id = dev_id
-        self._ports = {}
+        self.iports = {}
+        self.oports = {}
         
     @property
     def dev_id(self):
@@ -16,35 +33,16 @@ class Device(object):
         """
         return self._dev_id
 
-    _max_degree = None
-
-    @property
-    def max_degree(self):
-        """Maximal number of other devices this device can connect to
-        or None if there is no upper limit.
-        """
-        return self._max_degree
-
-    def attach(to_dev):
-        """Attach this device to another bidirectionally.
-        """
-        for d0, d1 in ((self, to_dev), (to_dev, self)):
-            if d0.max_degree is None or len(d0._ports) < d0.max_degree:
-                d0._ports[d1._dev_id] = d1
-            else:
-                # TODO: Define our own exception class
-                raise Exception('Too many attachments')
-
     def send(packet, to_id):
-        self._ports[to].receive(packet, self._dev_id)
+        # self._ports[to].receive(packet, self._dev_id)
+        raise NotImplementedError()
 
     def receive(packet, from_id):
         raise NotImplementedError()
 
+
 class Host(Device):
     """docstring for Host"""
-
-    _max_degree = 1
 
     def __init__(self, env, dev_id):
         super(Host, self).__init__(env, dev_id)
@@ -52,25 +50,61 @@ class Host(Device):
     def receive(packet):
         packet.reach_host(self)
 
+class BufferedPipe(object):
+    """docstring for Pipe"""
+    def __init__(self, env, rate, delay, buf_size):
+        super(Pipe, self).__init__()
+        self._env = env
+        self._rate = rate
+        self._delay = delay
+
+        self._buffer = PacketBuffer(env, buf_size)
+
 class Link(Device):
-    """Full-duplex link"""
+    """Full-duplex link
 
-    _max_degree = 2
+    Attributes:
 
-    def __init__(self, env, dev_id, rate_mbps, delay_ms, buffer_kbyte):
+    """
+
+    def __init__(self, env, dev_id, adj_ids, rate, delay, buf_size):
         super(Link, self).__init__(env, dev_id)
-        self.rate_mbps = rate_mbps
-        self.delay_ms = delay_ms
-        self.buffer_kbyte = buffer_kbyte
+
+        self._rate = rate
+        self._delay = delay
+        self._buf_size = buf_size
+
+        self._adj_ids = adj_ids
+
+        if len(adj_ids) != 2:
+            raise ValueError('Wrong number of link connections')
+
+        for adj_id in adj_ids:
+            self.iports[adj_id] = SizedStore(env)
+            self.oports[adj_id] = SizedStore(env)
+
+    @property
+    def rate(self):
+        """Link rate in Mbps."""
+        return self._rate
+
+    @property
+    def delay(self):
+        """Link delay in milliseconds."""
+        return self._delay
+
+    @property
+    def buf_size(self):
+        """Link buffer capacity in kilobytes."""
+        return self._buf_size
 
     def receive(packet):
         # TODO
         raise NotImplementedError()
         
 class Router(Device):
-    """docstring for Router"""
-
-    _max_degree = None
+    """docstring for Router
+    """
 
     def __init__(self, env, dev_id):
         super(Router, self).__init__(env, dev_id)

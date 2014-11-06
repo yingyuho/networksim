@@ -13,9 +13,9 @@ class Network(object):
     def parse_network(self, filename):
         curpath = os.path.dirname(__file__)
         filepath = os.path.abspath(os.path.join(curpath, "..", "testcases", filename))
-        f = open(filepath,'r')
+        stream = open(filepath,'r')
         sect_idx = 0
-        for line in f:
+        for line in stream:
             if line[0] == '-':
                 sect_idx += 1
             elif sect_idx == 0:
@@ -26,16 +26,13 @@ class Network(object):
                 self.routers.append(r)
             elif sect_idx == 2:
                 arr = line.split()
-                l = Link(self.env, arr[0], arr[3], arr[4], arr[5])
-                # Discuss changing constructor for Links, getting rid of the "attach"
-                # method for device. Unless these attachments are dynamic, there's no
-                # point in making a method to attach them as we go along...
+                l = Link(self.env, arr[0], (arr[1], arr[2]), arr[3], arr[4], arr[5])
                 self.links.append(l)
             else:
                 arr = line.split()
                 f = Flow(self.env, arr[0], arr[1], arr[2], arr[3], arr[4])
                 self.flows.append(f)
-        f.close()
+        stream.close()
                 
 
     def __init__(self, env, filename):
@@ -45,6 +42,9 @@ class Network(object):
         self.routers = []
         self.links = []
         self.flows = []
+
+        self._devices = {}
+        self._edges = {}
 
         if env is None:
             env = simpy.Environment()
