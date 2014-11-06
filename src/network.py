@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import division, print_function
 import simpy
 import os
@@ -9,7 +10,7 @@ class Network(object):
 
     """docstring for Network"""
 
-    def parse_network(self,filename):
+    def parse_network(self, filename):
         curpath = os.path.dirname(__file__)
         filepath = os.path.abspath(os.path.join(curpath, "..", "testcases", filename))
         f = open(filepath,'r')
