@@ -46,7 +46,8 @@ class DataPacket(Packet):
         router.send(self, router.look_up(self.dest))
         
     def reach_host(self, host):
-        print('{} -> {} : {}'.format(self.src, self.dest, self.message))
+        print('{:.3f} : {} -> {} : {}'.format(
+            host.env.now, self.src, self.dest, self.message))
         # TODO: Acknowledge
 
 class AckPacket(Packet):

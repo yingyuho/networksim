@@ -1,21 +1,9 @@
 from __future__ import division, print_function
 from functools import partial
+from operator import attrgetter
 import simpy
 
 from simpy_ext import SizedStore
-
-class PacketBuffer(SizedStore):
-    """Specialized version of :class:`simpy_ext.SizedStore` for 
-    :class:`packet.Packet`.
-
-    The *env* parameter is the :class:`~simpy.core.Environment` instance the
-    container is bound to.
-
-    The *capacity* defines the size of the buffer in bytes.
-
-    """
-    def __init__(self, env, capacity):
-        super(PacketBuffer, self).__init__(env, capacity, attrgetter('size'))
 
 class PipePair(object):
     """A named two-tuple of :class:`~simpy.core.Environment` objects for
@@ -54,6 +42,11 @@ class Device(object):
         """
         return self._max_degree
 
+    def _packet_listener(self, adj_id, port):
+        while True:
+            packet = yield port.pipe_in.get()
+            self.receive(packet, adj_id)
+
     def add_port(self, adj_id, port):
         """Add and listen to an I/O port to this device."""
         if adj_id in self._ports:
@@ -64,13 +57,8 @@ class Device(object):
 
         self._ports[adj_id] = port
 
-        # Add a listener
-        def listener():
-            while True:
-                packet = yield port.pipe_in.get()
-                self.receive(packet, adj_id)
-
-        self.env.process(listener())
+        # Add a listener process
+        self.env.process(self._packet_listener(adj_id, port))
 
     def send(self, packet, to_id):
         self._ports[to_id].pipe_out.put(packet)
@@ -93,26 +81,22 @@ class Host(Device):
     def add_flow(self, flow):
         self._flows[flow.id] = flow
 
-        def gen_packet():
+        def send_packet():
             while True:
                 packet = yield flow.next_packet.get()
                 for adj_id in self._ports:
                     self.send(packet, adj_id)
 
-        self.env.process(gen_packet())
+        self.env.process(send_packet())
 
-class BufferedPipe(object):
-    """docstring for Pipe"""
-    def __init__(self, env, rate, delay, buf_size):
-        super(Pipe, self).__init__()
-        self._env = env
-        self._rate = rate
-        self._delay = delay
-
-        self._buffer = PacketBuffer(env, buf_size)
 
 class Link(Device):
     """Full-duplex link
+
+    Attributes:
+        rate: Link rate in Mbps.
+        delay: Link delay in milliseconds.
+        buf_size: Link buffer capacity in kilobytes.
 
     """
 
@@ -121,23 +105,20 @@ class Link(Device):
     def __init__(self, env, dev_id, rate, delay, buf_size):
         super(Link, self).__init__(env, dev_id)
 
-        self._rate = rate
-        self._delay = delay
-        self._buf_size = buf_size
+        self.rate = rate
+        self.delay = delay
+        self.buf_size = buf_size
 
-    @property
-    def rate(self):
-        """Link rate in Mbps."""
-        return self._rate
+        self._packet_buffers = {}
 
-    @property
-    def delay(self):
-        """Link delay in milliseconds."""
-        return self._delay
+    def add_port(self, adj_id, port):
+        """Add and listen to an I/O port to this device."""
+        super(Link, self).add_port(adj_id, port)
 
-    @property
-    def buf_size(self):
-        """Link buffer capacity in kilobytes."""
+        # Packet sizes are measured in bytes. Hence the factor 1024. 
+        self._packet_buffers[adj_id] = SizedStore(
+            self.env, 1024 * self.buf_size, attrgetter('size'))
+
         return self._buf_size
 
     def receive(self, packet, from_id):
@@ -149,14 +130,15 @@ class Link(Device):
         
 class Router(Device):
     """docstring for Router
+
+    Attributes:
+        table: A dictionary mapping dest_id to link_id.
+
     """
 
     def __init__(self, env, dev_id):
         super(Router, self).__init__(env, dev_id)
-        self._table = {}
-
-    def look_up(dest_id):
-        return self._table[dest]
+        self.table = {}
 
     def receive(self, packet, from_id):
         packet.reach_router(self)
