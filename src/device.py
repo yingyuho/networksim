@@ -17,34 +17,34 @@ class PacketBuffer(SizedStore):
     def __init__(self, env, capacity):
         super(PacketBuffer, self).__init__(env, capacity, attrgetter('size'))
 
-class Port(object):
-    """docstring for Port"""
+class PipePair(object):
+    """A named two-tuple of :class:`~simpy.core.Environment` objects for
+    inter-device communication.
+    """
     def __init__(self):
-        super(Port, self).__init__()
-        self.queue_in = None
-        self.queue_out = None
+        super(PipePair, self).__init__()
+        self.pipe_in = None
+        self.pipe_out = None
 
 class Device(object):
     """docstring for Device"""
 
     def __init__(self, env, dev_id):
         super(Device, self).__init__()
-        self._env = env
+        self.env = env
         self._dev_id = dev_id
         self._ports = {}
         
     @property
     def dev_id(self):
-        """Unique ID of this device in the network.
-        """
+        """Unique ID of this device in the network."""
         return self._dev_id
 
     _max_degree = None
 
     @property
     def degree(self):
-        """Number of other devices this device connects to.
-        """
+        """Number of other devices this device connects to."""
         return len(self._ports)
 
     @property
@@ -55,8 +55,7 @@ class Device(object):
         return self._max_degree
 
     def add_port(self, adj_id, port):
-        """Add and listen to an I/O port to this device.
-        """
+        """Add and listen to an I/O port to this device."""
         if adj_id in self._ports:
             raise Exception('Duplicate port name')
 
@@ -68,13 +67,13 @@ class Device(object):
         # Add a listener
         def listener():
             while True:
-                packet = yield port.queue_in.get()
+                packet = yield port.pipe_in.get()
                 self.receive(packet, adj_id)
 
-        return listener()
+        self.env.process(listener())
 
     def send(self, packet, to_id):
-        self._ports[to_id].queue_out.put(packet)
+        self._ports[to_id].pipe_out.put(packet)
 
     def receive(self, packet, from_id):
         raise NotImplementedError()
@@ -100,7 +99,7 @@ class Host(Device):
                 for adj_id in self._ports:
                     self.send(packet, adj_id)
 
-        return gen_packet()
+        self.env.process(gen_packet())
 
 class BufferedPipe(object):
     """docstring for Pipe"""

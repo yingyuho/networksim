@@ -3,7 +3,7 @@ from __future__ import division, print_function
 import simpy
 import os
 from simpy_ext import SizedStore
-from device import Host, Link, Router, Port
+from device import Host, Link, Router, PipePair
 from packet import DataPacket
 from flow import Flow
 
@@ -43,15 +43,15 @@ class Network(object):
 
         # Establish communication between devices
         for e in self._edges:
-            port0 = Port()
-            port1 = Port()
-            port0.queue_in = port1.queue_out = simpy.Store(self.env)
-            port1.queue_in = port0.queue_out = simpy.Store(self.env)
-            self.env.process(self._nodes[e[0]].add_port(e[1], port0))
-            self.env.process(self._nodes[e[1]].add_port(e[0], port1))
+            port0 = PipePair()
+            port1 = PipePair()
+            port0.pipe_in = port1.pipe_out = simpy.Store(self.env)
+            port1.pipe_in = port0.pipe_out = simpy.Store(self.env)
+            self._nodes[e[0]].add_port(e[1], port0)
+            self._nodes[e[1]].add_port(e[0], port1)
 
         for f in self.flows:
-            self.env.process(self._nodes[f.src].add_flow(f))
+            self._nodes[f.src].add_flow(f)
 
     def __init__(self, env, filename):
         super(Network, self).__init__()
