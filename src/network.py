@@ -45,10 +45,13 @@ class Network(object):
         for e in self._edges:
             port0 = Port()
             port1 = Port()
-            port0.queue_in = port1.queue_out = SizedStore(self.env)
-            port1.queue_in = port0.queue_out = SizedStore(self.env)
-            self._nodes[e[0]].add_port(e[1], port0)
-            self._nodes[e[1]].add_port(e[0], port1)
+            port0.queue_in = port1.queue_out = simpy.Store(self.env)
+            port1.queue_in = port0.queue_out = simpy.Store(self.env)
+            self.env.process(self._nodes[e[0]].add_port(e[1], port0))
+            self.env.process(self._nodes[e[1]].add_port(e[0], port1))
+
+        for f in self.flows:
+            self.env.process(self._nodes[f.src].add_flow(f))
 
     def __init__(self, env, filename):
         super(Network, self).__init__()
@@ -68,9 +71,10 @@ class Network(object):
         self.parse_network(filename)
 
 
-    def run(until=None):
+    def run(self, until=None):
         return self.env.run(until=until)
     
 
 if __name__ == '__main__':
     tc0 = Network(None, 'tc0.txt')
+    tc0.run(10)

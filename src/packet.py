@@ -6,9 +6,8 @@ import simpy
 
 class Packet(object):
     """docstring for Packet"""
-    def __init__(self, arg):
+    def __init__(self):
         super(Packet, self).__init__()
-        self.arg = arg
 
     @property
     def size(self):
@@ -16,10 +15,10 @@ class Packet(object):
         """
         raise NotImplementedError()
 
-    def reach_router(router):
+    def reach_router(self, router):
         raise NotImplementedError()
 
-    def reach_host(host):
+    def reach_host(self, host):
         raise NotImplementedError()
 
 class DataPacket(Packet):
@@ -31,10 +30,10 @@ class DataPacket(Packet):
         self.dest = dest
         self.message = message
 
-    def reach_router(router):
+    def reach_router(self, router):
         router.send(self, router.look_up(self.dest))
         
-    def reach_host(host):
+    def reach_host(self, host):
         print('{} -> {} : {}'.format(self.src, self.dest, self.message))
         # TODO: Acknowledge
 
@@ -46,10 +45,10 @@ class AckPacket(Packet):
         self.dest = dest
         self.arg = arg
 
-    def reach_router(router):
+    def reach_router(self, router):
         router.send(self, router.look_up(self.dest))
         
-    def reach_host(host):
+    def reach_host(self, host):
         raise NotImplementedError()
         
 class RoutingPacket(Packet):

@@ -54,23 +54,30 @@ class Device(object):
         """
         return self._max_degree
 
-    def add_port(self, to_id, port):
-        """Add an I/O port to this device.
+    def add_port(self, adj_id, port):
+        """Add and listen to an I/O port to this device.
         """
-        if to_id in self._ports:
+        if adj_id in self._ports:
             raise Exception('Duplicate port name')
 
         if self.max_degree is not None and self.degree >= self.max_degree:
             raise Exception('Connectd to too many devices')
 
-        self._ports[to_id] = port
+        self._ports[adj_id] = port
 
-    def send(packet, to_id):
-        self._ports[to].receive(packet, self._dev_id)
+        # Add a listener
+        def listener():
+            while True:
+                packet = yield port.queue_in.get()
+                self.receive(packet, adj_id)
 
-    def receive(packet, from_id):
+        return listener()
+
+    def send(self, packet, to_id):
+        self._ports[to_id].queue_out.put(packet)
+
+    def receive(self, packet, from_id):
         raise NotImplementedError()
-
 
 class Host(Device):
     """docstring for Host"""
@@ -79,9 +86,21 @@ class Host(Device):
 
     def __init__(self, env, dev_id):
         super(Host, self).__init__(env, dev_id)
+        self._flows = {}
 
-    def receive(packet):
+    def receive(self, packet, from_id):
         packet.reach_host(self)
+
+    def add_flow(self, flow):
+        self._flows[flow.id] = flow
+
+        def gen_packet():
+            while True:
+                packet = yield flow.next_packet.get()
+                for adj_id in self._ports:
+                    self.send(packet, adj_id)
+
+        return gen_packet()
 
 class BufferedPipe(object):
     """docstring for Pipe"""
@@ -122,9 +141,12 @@ class Link(Device):
         """Link buffer capacity in kilobytes."""
         return self._buf_size
 
-    def receive(packet):
-        # TODO
-        raise NotImplementedError()
+    def receive(self, packet, from_id):
+        # Just relay incoming packets to the other side
+        for adj_id in self._ports:
+            if adj_id != from_id:
+                self.send(packet, adj_id)
+        # TODO: Add latency, etc.
         
 class Router(Device):
     """docstring for Router
@@ -137,6 +159,6 @@ class Router(Device):
     def look_up(dest_id):
         return self._table[dest]
 
-    def receive(packet):
+    def receive(self, packet, from_id):
         packet.reach_router(self)
         
