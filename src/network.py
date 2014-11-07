@@ -43,10 +43,10 @@ class Network(object):
 
         # Establish communication between devices
         for e in self._edges:
-            port0 = PipePair()
-            port1 = PipePair()
-            port0.pipe_in = port1.pipe_out = simpy.Store(self.env)
-            port1.pipe_in = port0.pipe_out = simpy.Store(self.env)
+            pipe01 = simpy.Store(self.env)
+            pipe10 = simpy.Store(self.env)
+            port0 = PipePair(pipe10, pipe01)
+            port1 = PipePair(pipe01, pipe10)
             self._nodes[e[0]].add_port(e[1], port0)
             self._nodes[e[1]].add_port(e[0], port1)
 

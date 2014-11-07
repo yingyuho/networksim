@@ -21,10 +21,10 @@ class PipePair(object):
     """A named two-tuple of :class:`~simpy.core.Environment` objects for
     inter-device communication.
     """
-    def __init__(self):
+    def __init__(self, pipe_in, pipe_out):
         super(PipePair, self).__init__()
-        self.pipe_in = None
-        self.pipe_out = None
+        self.pipe_in = pipe_in
+        self.pipe_out = pipe_out
 
 class Device(object):
     """docstring for Device"""
