@@ -17,6 +17,13 @@ class PacketBuffer(SizedStore):
     def __init__(self, env, capacity):
         super(PacketBuffer, self).__init__(env, capacity, attrgetter('size'))
 
+class Port(object):
+    """docstring for Port"""
+    def __init__(self):
+        super(Port, self).__init__()
+        self.queue_in = None
+        self.queue_out = None
+
 class Device(object):
     """docstring for Device"""
 
@@ -24,8 +31,7 @@ class Device(object):
         super(Device, self).__init__()
         self._env = env
         self._dev_id = dev_id
-        self.iports = {}
-        self.oports = {}
+        self._ports = {}
         
     @property
     def dev_id(self):
@@ -33,9 +39,34 @@ class Device(object):
         """
         return self._dev_id
 
+    _max_degree = None
+
+    @property
+    def degree(self):
+        """Number of other devices this device connects to.
+        """
+        return len(self._ports)
+
+    @property
+    def max_degree(self):
+        """Maximal number of other devices this device can connect to
+        or None if there is no upper limit.
+        """
+        return self._max_degree
+
+    def add_port(self, to_id, port):
+        """Add an I/O port to this device.
+        """
+        if to_id in self._ports:
+            raise Exception('Duplicate port name')
+
+        if self.max_degree is not None and self.degree >= self.max_degree:
+            raise Exception('Connectd to too many devices')
+
+        self._ports[to_id] = port
+
     def send(packet, to_id):
-        # self._ports[to].receive(packet, self._dev_id)
-        raise NotImplementedError()
+        self._ports[to].receive(packet, self._dev_id)
 
     def receive(packet, from_id):
         raise NotImplementedError()
@@ -43,6 +74,8 @@ class Device(object):
 
 class Host(Device):
     """docstring for Host"""
+
+    _max_degree = 1
 
     def __init__(self, env, dev_id):
         super(Host, self).__init__(env, dev_id)
@@ -63,25 +96,16 @@ class BufferedPipe(object):
 class Link(Device):
     """Full-duplex link
 
-    Attributes:
-
     """
 
-    def __init__(self, env, dev_id, adj_ids, rate, delay, buf_size):
+    _max_degree = 2
+
+    def __init__(self, env, dev_id, rate, delay, buf_size):
         super(Link, self).__init__(env, dev_id)
 
         self._rate = rate
         self._delay = delay
         self._buf_size = buf_size
-
-        self._adj_ids = adj_ids
-
-        if len(adj_ids) != 2:
-            raise ValueError('Wrong number of link connections')
-
-        for adj_id in adj_ids:
-            self.iports[adj_id] = SizedStore(env)
-            self.oports[adj_id] = SizedStore(env)
 
     @property
     def rate(self):

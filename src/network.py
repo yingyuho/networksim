@@ -2,7 +2,8 @@
 from __future__ import division, print_function
 import simpy
 import os
-from device import Host, Link, Router
+from simpy_ext import SizedStore
+from device import Host, Link, Router, Port
 from packet import DataPacket
 from flow import Flow
 
@@ -16,24 +17,38 @@ class Network(object):
         stream = open(filepath,'r')
         sect_idx = 0
         for line in stream:
+            fields = line.strip().split()
             if line[0] == '-':
                 sect_idx += 1
             elif sect_idx == 0:
-                h = Host(self.env, line[0:2])
+                h = Host(self.env, fields[0])
                 self.hosts.append(h)
+                self._nodes[fields[0]] = h
             elif sect_idx == 1:
-                r = Router(self.env, line[0:2])
+                r = Router(self.env, fields[0])
                 self.routers.append(r)
+                self._nodes[fields[0]] = r
             elif sect_idx == 2:
                 arr = line.split()
-                l = Link(self.env, arr[0], (arr[1], arr[2]), arr[3], arr[4], arr[5])
+                l = Link(self.env, fields[0], fields[3], fields[4], fields[5])
                 self.links.append(l)
+                self._nodes[fields[0]] = l
+                self._edges.append((fields[0], fields[1]))
+                self._edges.append((fields[0], fields[2]))
             else:
                 arr = line.split()
-                f = Flow(self.env, arr[0], arr[1], arr[2], arr[3], arr[4])
+                f = Flow(self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
         stream.close()
-                
+
+        # Establish communication between devices
+        for e in self._edges:
+            port0 = Port()
+            port1 = Port()
+            port0.queue_in = port1.queue_out = SizedStore(self.env)
+            port1.queue_in = port0.queue_out = SizedStore(self.env)
+            self._nodes[e[0]].add_port(e[1], port0)
+            self._nodes[e[1]].add_port(e[0], port1)
 
     def __init__(self, env, filename):
         super(Network, self).__init__()
@@ -43,8 +58,8 @@ class Network(object):
         self.links = []
         self.flows = []
 
-        self._devices = {}
-        self._edges = {}
+        self._nodes = {}
+        self._edges = []
 
         if env is None:
             env = simpy.Environment()
