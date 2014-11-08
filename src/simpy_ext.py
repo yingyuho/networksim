@@ -7,16 +7,6 @@ class SizedStore(Store):
     """Models the production and consumption of concrete Python objects of 
     variable sizes.
 
-    Items put into the store can be of any type.  By default, they are put and
-    retrieved from the store in a first-in first-out order.
-
-    The *env* parameter is the :class:`~simpy.core.Environment` instance the
-    container is bound to.
-
-    The *capacity* defines the size of the Store and must be a positive number
-    (> 0). By default, a Store is of unlimited size. A :exc:`ValueError` is
-    raised if the value is negative.
-
     The *sizefunc* returns the size of an item when applied on it. The return
     value must be a non-negative integer.
 

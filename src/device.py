@@ -10,7 +10,6 @@ class PipePair(object):
     inter-device communication.
     """
     def __init__(self, pipe_in, pipe_out):
-        super(PipePair, self).__init__()
         self.pipe_in = pipe_in
         self.pipe_out = pipe_out
 
@@ -18,7 +17,6 @@ class Device(object):
     """docstring for Device"""
 
     def __init__(self, env, dev_id):
-        super(Device, self).__init__()
         self.env = env
         self._dev_id = dev_id
         self._ports = {}
@@ -42,10 +40,12 @@ class Device(object):
         """
         return self._max_degree
 
-    def _packet_listener(self, adj_id, port):
-        while True:
-            packet = yield port.pipe_in.get()
-            self.receive(packet, adj_id)
+    def _add_packet_listener(self, adj_id, port):
+        def listener():
+            while True:
+                packet = yield port.pipe_in.get()
+                self.receive(packet, adj_id)
+        self.env.process(listener())
 
     def add_port(self, adj_id, port):
         """Add and listen to an I/O port to this device."""
@@ -58,12 +58,15 @@ class Device(object):
         self._ports[adj_id] = port
 
         # Add a listener process
-        self.env.process(self._packet_listener(adj_id, port))
+        self._add_packet_listener(adj_id, port)
 
     def send(self, packet, to_id):
         self._ports[to_id].pipe_out.put(packet)
 
     def receive(self, packet, from_id):
+        raise NotImplementedError()
+
+    def activate_ports(self):
         raise NotImplementedError()
 
 class Host(Device):
@@ -90,13 +93,62 @@ class Host(Device):
         self.env.process(send_packet())
 
 
-class Link(Device):
-    """Full-duplex link
+class BufferedCable(object):
+    """docstring for BufferedCable
 
     Attributes:
         rate: Link rate in Mbps.
         delay: Link delay in milliseconds.
         buf_size: Link buffer capacity in kilobytes.
+
+    """
+    def __init__(self, env, rate, delay, buf_size):
+        self.env = env
+
+        self.rate = rate
+        self.delay = delay
+        self.buf_size = buf_size
+
+        # Packet sizes are measured in bytes. Hence the factor 1024. 
+        self._packet_buffer = SizedStore(
+            self.env, 1024 * self.buf_size, attrgetter('size'))
+
+        self._cable = simpy.Store(env)
+
+        self.io = PipePair(simpy.Store(env), simpy.Store(env))
+
+        self.env.process(self.feed_buffer())
+        self.env.process(self.feed_cable())
+
+    def feed_buffer(self):
+        while True:
+            packet = yield self.io.pipe_in.get()
+            # print('At Packet {0}'.format(packet.packet_no))
+            # print('Buffer level: {}'.format(self._packet_buffer._level))
+            
+            with self._packet_buffer.put(packet) as req:
+                ret = yield req | self.env.event().succeed()
+                if req not in ret:
+                    # TODO: Packet loss
+                    print('Packet {0} is lost'.format(packet.packet_no))
+
+    def feed_cable(self):
+        while True:
+            packet = yield self._packet_buffer.get()
+            self.env.process(self.latency(packet))
+            yield self.env.timeout(packet.size * 8 / 1.0E6)
+
+    def latency(self, packet):
+        yield self.env.timeout(self.delay / 1.0E3)
+        self.io.pipe_out.put(packet)
+
+class Link(Device):
+    """Full-duplex link
+
+    Attributes:
+        rate: Link rate in Mbps. Do not modify.
+        delay: Link delay in milliseconds. Do not modify.
+        buf_size: Link buffer capacity in kilobytes. Do not modify.
 
     """
 
@@ -109,24 +161,26 @@ class Link(Device):
         self.delay = delay
         self.buf_size = buf_size
 
-        self._packet_buffers = {}
+        self._cables = {}
 
     def add_port(self, adj_id, port):
         """Add and listen to an I/O port to this device."""
         super(Link, self).add_port(adj_id, port)
 
-        # Packet sizes are measured in bytes. Hence the factor 1024. 
-        self._packet_buffers[adj_id] = SizedStore(
-            self.env, 1024 * self.buf_size, attrgetter('size'))
+        self._cables[adj_id] = BufferedCable(
+            self.env, self.rate, self.delay, self.buf_size)
 
-        return self._buf_size
+        def listener(adj_id):
+            while True:
+                packet = yield self._cables[adj_id].io.pipe_out.get()
+                for to_id in self._ports:
+                    if to_id != adj_id:
+                        self.send(packet, to_id)
+
+        self.env.process(listener(adj_id))
 
     def receive(self, packet, from_id):
-        # Just relay incoming packets to the other side
-        for adj_id in self._ports:
-            if adj_id != from_id:
-                self.send(packet, adj_id)
-        # TODO: Add latency, etc.
+        self._cables[from_id].io.pipe_in.put(packet)
         
 class Router(Device):
     """docstring for Router

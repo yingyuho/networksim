@@ -29,14 +29,13 @@ class Network(object):
                 self.routers.append(r)
                 self._nodes[fields[0]] = r
             elif sect_idx == 2:
-                arr = line.split()
+                fields[3:6] = map(float, fields[3:6])
                 l = Link(self.env, fields[0], fields[3], fields[4], fields[5])
                 self.links.append(l)
                 self._nodes[fields[0]] = l
                 self._edges.append((fields[0], fields[1]))
                 self._edges.append((fields[0], fields[2]))
             else:
-                arr = line.split()
                 f = Flow(self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
         stream.close()
@@ -77,4 +76,4 @@ class Network(object):
 
 if __name__ == '__main__':
     tc0 = Network(None, 'tc0.txt')
-    tc0.run(10)
+    tc0.run(2)

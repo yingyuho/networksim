@@ -23,10 +23,10 @@ class Flow(object):
         self.env.timeout(self.start)
         i = 0
         while True:
-            packet = DataPacket(self.src, self.dest, i)
+            packet = DataPacket(self.src, self.dest, self.id, i)
             t1 = self.next_packet.put(packet)
             ret = yield t1 | self.env.event().succeed()
             if t1 not in ret:
                 print('Failed to send Packet {0}'.format(i))
-            yield self.env.timeout(1)
+            yield self.env.timeout(0.008)
             i += 1

@@ -30,11 +30,12 @@ class DataPacket(Packet):
 
     _payload_size = 1024
 
-    def __init__(self, src, dest, message):
+    def __init__(self, src, dest, flow_id, packet_no):
         super(DataPacket, self).__init__()
         self.src = src
         self.dest = dest
-        self.message = message
+        self.flow_id = flow_id
+        self.packet_no = packet_no
 
     @property
     def payload_size(self):
@@ -43,11 +44,11 @@ class DataPacket(Packet):
         return self._payload_size
 
     def reach_router(self, router):
-        router.send(self, router.look_up(self.dest))
+        router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
-        print('{:.3f} : {} -> {} : {}'.format(
-            host.env.now, self.src, self.dest, self.message))
+        print('{:.6f} : {} -> {} : {}'.format(
+            host.env.now, self.src, self.dest, self.packet_no))
         # TODO: Acknowledge
 
 class AckPacket(Packet):
@@ -62,7 +63,7 @@ class AckPacket(Packet):
         self.arg = arg
 
     def reach_router(self, router):
-        router.send(self, router.look_up(self.dest))
+        router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
         raise NotImplementedError()
@@ -75,4 +76,12 @@ class RoutingPacket(Packet):
     def __init__(self, arg):
         super(RoutingPacket, self).__init__()
         self.arg = arg
+
+    def reach_router(self, router):
+        # TODO
+        raise NotImplementedError()
+        
+    def reach_host(self, host):
+        # Nothing, really
+        pass
         
