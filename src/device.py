@@ -63,6 +63,11 @@ class Device(object):
     def send(self, packet, to_id):
         self._ports[to_id].pipe_out.put(packet)
 
+    def send_except(self, packet, except_id=None):
+        for adj_id in self._ports:
+            if except_id is None or adj_id != except_id:
+                self.send(packet, adj_id)
+
     def receive(self, packet, from_id):
         raise NotImplementedError()
 
@@ -125,7 +130,7 @@ class BufferedCable(object):
             packet = yield self.io.pipe_in.get()
             # print('At Packet {0}'.format(packet.packet_no))
             # print('Buffer level: {}'.format(self._packet_buffer._level))
-            
+
             with self._packet_buffer.put(packet) as req:
                 ret = yield req | self.env.event().succeed()
                 if req not in ret:

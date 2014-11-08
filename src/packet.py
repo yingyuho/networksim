@@ -47,26 +47,29 @@ class DataPacket(Packet):
         router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
-        print('{:.6f} : {} -> {} : {}'.format(
+        print('{:.6f} : {} -> {} : Dta {}'.format(
             host.env.now, self.src, self.dest, self.packet_no))
-        # TODO: Acknowledge
+        host.send_except(
+            AckPacket(self.dest, self.src, self.flow_id, self.packet_no))
 
 class AckPacket(Packet):
     """docstring for AckPacket"""
 
     _size = 64
 
-    def __init__(self, src, dest, arg):
+    def __init__(self, src, dest, flow_id, packet_no):
         super(AckPacket, self).__init__()
         self.src = src
         self.dest = dest
-        self.arg = arg
+        self.flow_id = flow_id
+        self.packet_no = packet_no
 
     def reach_router(self, router):
         router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
-        raise NotImplementedError()
+        print('{:.6f} : {} -> {} : Ack {}'.format(
+            host.env.now, self.src, self.dest, self.packet_no))
         
 class RoutingPacket(Packet):
     """docstring for RoutingPacket"""
