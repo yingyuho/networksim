@@ -30,3 +30,11 @@ class Flow(object):
                 print('Failed to send Packet {0}'.format(i))
             yield self.env.timeout(0.008)
             i += 1
+
+# TODO by yingyu
+class StupidFlow(Flow):
+    """docstring for StupidFlow"""
+    def __init__(self, arg):
+        super(StupidFlow, self).__init__()
+        self.arg = arg
+        

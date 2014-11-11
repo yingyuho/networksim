@@ -17,7 +17,7 @@ class Packet(object):
         """
         return self._size
 
-    def reach_router(self, router):
+    def reach_router(self, router, port_id):
         raise NotImplementedError()
 
     def reach_host(self, host):
@@ -43,7 +43,7 @@ class DataPacket(Packet):
         """
         return self._payload_size
 
-    def reach_router(self, router):
+    def reach_router(self, router, port_id):
         router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
@@ -64,13 +64,13 @@ class AckPacket(Packet):
         self.flow_id = flow_id
         self.packet_no = packet_no
 
-    def reach_router(self, router):
+    def reach_router(self, router, port_id):
         router.send(self, router.table[self.dest])
-        
+
     def reach_host(self, host):
         print('{:.6f} : {} -> {} : Ack {}'.format(
             host.env.now, self.src, self.dest, self.packet_no))
-        
+
 class RoutingPacket(Packet):
     """docstring for RoutingPacket"""
 
@@ -80,7 +80,7 @@ class RoutingPacket(Packet):
         super(RoutingPacket, self).__init__()
         self.arg = arg
 
-    def reach_router(self, router):
+    def reach_router(self, router, port_id):
         # TODO
         raise NotImplementedError()
         

@@ -141,7 +141,7 @@ class BufferedCable(object):
         while True:
             packet = yield self._packet_buffer.get()
             self.env.process(self.latency(packet))
-            yield self.env.timeout(packet.size * 8 / 1.0E6)
+            yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
 
     def latency(self, packet):
         yield self.env.timeout(self.delay / 1.0E3)
@@ -199,6 +199,12 @@ class Router(Device):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
 
+        self.env.process(self.foo())
+
+    def foo(self):
+        # do something
+        yield self.env.event().succeed()
+
     def receive(self, packet, from_id):
-        packet.reach_router(self)
+        packet.reach_router(self, from_id)
         
