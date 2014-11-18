@@ -2,6 +2,7 @@ from __future__ import division, print_function
 from functools import partial
 from collections import defaultdict
 from operator import attrgetter
+
 import simpy
 
 from simpy_ext import SizedStore
@@ -152,7 +153,9 @@ class BufferedCable(object):
                 ret = yield req | self.env.event().succeed()
                 if req not in ret:
                     # TODO: Packet loss
-                    print('Packet {0} is lost'.format(packet.packet_no))
+                    pass
+                    # print('{:06f} : Packet {} is lost'.format(
+                    #     self.env.now, packet.packet_no))
 
     def feed_cable(self):
         while True:

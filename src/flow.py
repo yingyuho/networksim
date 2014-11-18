@@ -1,8 +1,10 @@
 from __future__ import division, print_function
-from collections import namedtuple, deque
+from collections import deque, namedtuple
 from math import ceil
 import heapq
+
 import simpy
+
 from packet import DataPacket, AckPacket
 
 class Flow(object):
@@ -49,7 +51,9 @@ class GoBackNAcker(object):
     """Used by the client-side of flow to find the ack number.
     """
     def __init__(self, first_no=1):
+        # All packets with packet_no < expected have been received
         self._expected = first_no
+        # Packet numbers not received in order
         self._partial = []
 
     def __call__(self, n):
@@ -94,13 +98,16 @@ class ExpDecayTimer(object):
             self.a = self.d = t
         else:
             self.a = (1 - b) * a + b * t
-            self.d = (1 - b) * d + b * (t - a)
+            self.d = (1 - b) * d + b * abs(t - a)
 
         return self.a + self.n * self.d
 
-_PktTrack = namedtuple(
-    'PktTrack', 
-    'packet_no timestamp timeout acked')
+class _PktTrack(object):
+    def __init__(self, packet_no, timestamp, expiration, acked):
+        self.packet_no = packet_no
+        self.timestamp = timestamp
+        self.expiration = expiration
+        self.acked = acked
 
 class TCPTahoeFlow(Flow):
     """docstring for TCPTahoeFlow"""
@@ -108,24 +115,154 @@ class TCPTahoeFlow(Flow):
         super(TCPTahoeFlow, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s)
 
-        self.timeout = 0.1
+        self.timeout = 1.0
         self._timer = ExpDecayTimer()
 
         # Max window size
-        self.n = 10
-        self.n_prev = self.n
-        self.window = simpy.Container(env, init=self.n)
+        self.n = 1
+        self.allowance = simpy.Container(env, init=self.n)
+        self.debt = 0
+
+        self._out_packets = deque()
+        self._expected = 1
+
+        self._alarm = None
+        self._deadlines = []
 
     def make_packet(self):
         i0 = self._first_packet
         for i in range(i0, i0 + self.num_packets):
             packet = DataPacket(self.src, self.dest, self.id, i)
-            yield self.window.get(1)
-            yield self.next_packet.put(packet)
-            print('{:.6f} : {} : Dta {}'.format(
-                self.env.now, self.id, i))
 
-    def get_ack(self, packet_no):
-        self.window.put(1)
-        print('{:.6f} : {} : Ack {}'.format(
-            self.env.now, self.id, packet_no))
+            yield self.allowance.get(1)
+            yield self.next_packet.put(packet)
+
+            t = self.env.now
+
+            self._out_packets.append(_PktTrack(i, t, t + self.timeout, False))
+
+            heapq.heappush(self._deadlines, (t + self.timeout, i))
+            self.set_alarm()
+
+            print('{:.6f} : {} : Dta {}'.format(self.env.now, self.id, i))
+
+    def countdown(self, timeout):
+        try:
+            yield self.env.timeout(timeout)
+
+            # Alarm expires
+            self._alarm = None
+            deadlines = self._deadlines
+            packet_no = deadlines[0][1]
+            pktt = self.find_pkt_tracker(packet_no)
+            heapq.heappop(deadlines)
+
+            assert packet_no >= self._expected
+
+            # Half N
+            if packet_no == self._expected:
+                dn = self.n - max(self.n // 2, 1)
+                self.debt += dn
+                self.n -= dn
+                # print('n = {}'.format(self.n))
+
+            print('{:06f} : Timeout {}'.format(self.env.now, packet_no))
+
+            self.set_alarm()
+
+            packet = DataPacket(self.src, self.dest, self.id, packet_no)
+            self.inc_allowance()
+            yield self.allowance.get(1)
+
+            if packet_no >= self._expected:
+
+                yield self.next_packet.put(packet)
+
+                t = self.env.now
+                print('{:06f} : Retransmit {}'.format(t, packet_no))
+
+                pktt.timestamp = t
+                pktt.expiration = t + self.timeout
+
+                heapq.heappush(deadlines, (pktt.expiration, packet_no))
+
+                self.set_alarm()
+
+        except simpy.Interrupt:
+            pass
+
+    def find_pkt_tracker(self, packet_no):
+        opkts = self._out_packets
+        i = packet_no - self._expected
+        if i < 0 or i >= len(opkts):
+            return None
+        else:
+            assert opkts[i].packet_no == packet_no
+            return opkts[i]
+
+    def set_alarm(self):
+        if (self._alarm is not None) and (not self._alarm.processed):
+            self._alarm.interrupt()
+
+        d = self._deadlines
+        while d:
+            pktt = self.find_pkt_tracker(d[0][1])
+            if pktt is None or pktt.acked:
+                heapq.heappop(d)
+            else:
+                break
+        if d:
+            timeout = d[0][0] - self.env.now
+            # print(d[0])
+            # print(self.env.now)
+            assert timeout >= 0
+            self._alarm = self.env.process(self.countdown(timeout))
+
+    def inc_allowance(self):
+        if self.debt > 0:
+            self.debt -= 1
+        else:
+            self.allowance.put(1)
+
+    def get_ack(self, ack_no):
+        packet_no = ack_no - 1
+        q = self._out_packets
+
+        if packet_no < self._expected:
+            return
+
+        # Locate the packet tracker
+        pktt = self.find_pkt_tracker(packet_no)
+
+        # Mark the packet as acked
+        pktt.acked = True
+
+        # Update timeout
+        delay = self.env.now - pktt.timestamp
+        self.timeout = self._timer(delay)
+
+        pdiff = packet_no - self._expected + 1
+
+        # Expect the next packet
+        self._expected = packet_no + 1
+
+        # Remove acked packets from queue
+        for _ in range(pdiff):
+            q.popleft()
+            self.inc_allowance()
+
+        deadlines = self._deadlines
+
+        # Reset alarm
+        # if self._alarm is not None and deadlines[0][1] <= packet_no:
+        #     self._alarm.interrupt()
+        #     self._alarm = None
+        #     heapq.heappop(deadlines)
+
+        self.set_alarm()
+
+        # Increase N
+        self.n += 1
+        self.inc_allowance()
+        # print('{:.6f} {}'.format(self.env.now, packet_no))
+        print('{:.6f} : {} : Ack {}'.format(self.env.now, self.id, packet_no))
