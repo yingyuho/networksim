@@ -28,7 +28,7 @@ class DataPacket(Packet):
 
     _size = 1536
 
-    _payload_size = 1024
+    payload_size = 1024
 
     def __init__(self, src, dest, flow_id, packet_no):
         super(DataPacket, self).__init__()
@@ -37,12 +37,6 @@ class DataPacket(Packet):
         self.flow_id = flow_id
         self.packet_no = packet_no
 
-    @property
-    def payload_size(self):
-        """Capacity for payload in bytes.
-        """
-        return self._payload_size
-
     def reach_router(self, router, port_id):
         router.send(self, router.table[self.dest])
         
@@ -50,7 +44,7 @@ class DataPacket(Packet):
         print('{:.6f} : {} -> {} : Dta {}'.format(
             host.env.now, self.src, self.dest, self.packet_no))
         host.send_except(
-            AckPacket(self.dest, self.src, self.flow_id, self.packet_no))
+            AckPacket(self.dest, self.src, self.flow_id, 1 + self.packet_no))
 
 class AckPacket(Packet):
     """docstring for AckPacket"""
@@ -68,8 +62,7 @@ class AckPacket(Packet):
         router.send(self, router.table[self.dest])
 
     def reach_host(self, host):
-        print('{:.6f} : {} -> {} : Ack {}'.format(
-            host.env.now, self.src, self.dest, self.packet_no))
+        host.get_ack(self.flow_id, self.packet_no)
 
 class RoutingPacket(Packet):
     """docstring for RoutingPacket"""

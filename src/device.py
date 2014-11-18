@@ -97,6 +97,8 @@ class Host(Device):
 
         self.env.process(send_packet())
 
+    def get_ack(self, flow_id, packet_no):
+        self._flows[flow_id].get_ack(packet_no)
 
 class BufferedCable(object):
     """docstring for BufferedCable
@@ -140,8 +142,8 @@ class BufferedCable(object):
     def feed_cable(self):
         while True:
             packet = yield self._packet_buffer.get()
-            self.env.process(self.latency(packet))
             yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
+            self.env.process(self.latency(packet))
 
     def latency(self, packet):
         yield self.env.timeout(self.delay / 1.0E3)
