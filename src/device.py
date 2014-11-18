@@ -1,9 +1,11 @@
 from __future__ import division, print_function
 from functools import partial
+from collections import defaultdict
 from operator import attrgetter
 import simpy
 
 from simpy_ext import SizedStore
+from flow import GoBackNAcker
 
 class PipePair(object):
     """A named two-tuple of :class:`~simpy.core.Environment` objects for
@@ -82,6 +84,7 @@ class Host(Device):
     def __init__(self, env, dev_id):
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
+        self._acker = defaultdict(GoBackNAcker)
 
     def receive(self, packet, from_id):
         packet.reach_host(self)
@@ -96,6 +99,9 @@ class Host(Device):
                     self.send(packet, adj_id)
 
         self.env.process(send_packet())
+
+    def get_data(self, flow_id, packet_no):
+        return self._acker[flow_id](packet_no)
 
     def get_ack(self, flow_id, packet_no):
         self._flows[flow_id].get_ack(packet_no)
