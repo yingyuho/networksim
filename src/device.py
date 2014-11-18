@@ -209,7 +209,7 @@ class Router(Device):
         self.send_except(self, rp)
 	for p in self.ports:
             rp = RoutingPacket(p)
-            self.send_except(self, rp)
+            self.send_except(self, rp, except_id = p)
         yield self.env.event().succeed()
         
 
