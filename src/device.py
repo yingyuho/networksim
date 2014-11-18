@@ -203,20 +203,25 @@ class Router(Device):
 
         self.env.process(self.sendRP())
 
+    """ Sends a routing packet to all the ports """
     def sendRP(self):
-	for a in _ports:
-	    rp = RoutingPacket(self.dev_id)
-	    sendToAllPorts(self, rp)
-
+        rp = RoutingPacket(self.dev_id)
+        sendToAllPorts(self, rp)
+	for p in self.ports:
+            rp = RoutingPacket(p)
+            sendToAllPorts(self, rp)
         yield self.env.event().succeed()
-    
-    def sendToAllPorts(self, rp)
+
+    """ Sends the same routing packet to all ports"""
+
+    def sendToAllPorts(self, rp, arrivedId = None)
         for p in self._ports:
-            self.send(rp, self._ports[p])
+            if p is not arrivedId and p is not rp.startId:
+                self.send(rp, self._ports[p])
 
     def receive(self, packet, from_id):
         packet.reach_router(self, from_id)
         if isinstance(RoutingPacket, packet):
-            sendToAllPorts(self, packet)
+            sendToAllPorts(self, packet, arrivedId = from_id)
 	
         
