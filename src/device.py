@@ -209,22 +209,20 @@ class Router(Device):
 
         self.env.process(self.sendRP())
 
-    """ Sends a routing packet to all the ports """
     def sendRP(self):
+        """Send a routing packet to all the ports."""
         rp = RoutingPacket(self.dev_id)
         self.send_except(self, rp)
-	for p in self.ports:
+        for p in self.ports:
             rp = RoutingPacket(p)
             self.send_except(self, rp, except_id = p)
         yield self.env.event().succeed()
         
 
-    """ recieves a packet from a port
-        if the packet is a routingpacket
-        then, send the packet to all the other ports"""
     def receive(self, packet, from_id):
+        """Recieves a packet from a port if the packet is a routing packet.
+        then, send the packet to all the other ports.
+        """
         packet.reach_router(self, from_id)
         if isinstance(RoutingPacket, packet):
             self.send_except(self, packet, except_id = from_id)
-	
-        
