@@ -70,13 +70,14 @@ class RoutingPacket(Packet):
 
     _size = 64
 
-    def __init__(self, startId):
+    def __init__(self, start_id):
         super(RoutingPacket, self).__init__()
-        self.startId = startId
+        self.start_id = start_id
 
     def reach_router(self, router, port_id):
-        if self.startId not in router.table:
-            router.table[self.startId] = port_id
+        if self.start_id not in router.table:
+            router.table[self.start_id] = port_id
+            router.send_except(self, except_id=port_id)
         
     def reach_host(self, host):
         # Nothing, really

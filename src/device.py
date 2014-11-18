@@ -6,6 +6,7 @@ import simpy
 
 from simpy_ext import SizedStore
 from flow import GoBackNAcker
+from packet import RoutingPacket
 
 class PipePair(object):
     """A named two-tuple of :class:`~simpy.core.Environment` objects for
@@ -86,6 +87,8 @@ class Host(Device):
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
 
+        self.env.process(self.sendRP())
+
     def receive(self, packet, from_id):
         packet.reach_host(self)
 
@@ -105,6 +108,12 @@ class Host(Device):
 
     def get_ack(self, flow_id, packet_no):
         self._flows[flow_id].get_ack(packet_no)
+
+    def sendRP(self):
+        """Send a routing packet to all the ports."""
+        rp = RoutingPacket(self.dev_id)
+        self.send_except(rp)
+        yield self.env.event().succeed()
 
 class BufferedCable(object):
     """docstring for BufferedCable
@@ -212,10 +221,7 @@ class Router(Device):
     def sendRP(self):
         """Send a routing packet to all the ports."""
         rp = RoutingPacket(self.dev_id)
-        self.send_except(self, rp)
-        for p in self.ports:
-            rp = RoutingPacket(p)
-            self.send_except(self, rp, except_id = p)
+        self.send_except(rp)
         yield self.env.event().succeed()
         
 
@@ -224,5 +230,3 @@ class Router(Device):
         then, send the packet to all the other ports.
         """
         packet.reach_router(self, from_id)
-        if isinstance(RoutingPacket, packet):
-            self.send_except(self, packet, except_id = from_id)

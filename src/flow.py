@@ -1,11 +1,14 @@
 from __future__ import division, print_function
-from collections import namedtuple
+from collections import namedtuple, deque
 from math import ceil
 import heapq
 import simpy
 from packet import DataPacket, AckPacket
 
 class Flow(object):
+
+    _first_packet = 1
+
     def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
         self.env = env
         self.id = flow_id
@@ -16,10 +19,6 @@ class Flow(object):
 
         self.num_packets = int(ceil(
             data_mb * 1.0E6 / DataPacket.payload_size))
-
-        self.window = 1
-
-        self._num_out_packets = 0
 
         self.next_packet = simpy.Store(env)
 
@@ -34,7 +33,7 @@ class Flow(object):
         print('Hello!')
 
     def make_packet(self):
-        i = 1
+        i = self._first_packet
         while True:
             packet = DataPacket(self.src, self.dest, self.id, i)
             yield self.next_packet.put(packet)
@@ -47,6 +46,8 @@ class Flow(object):
             self.env.now, self.id, packet_no))
 
 class GoBackNAcker(object):
+    """Used by the client-side of flow to find the ack number.
+    """
     def __init__(self, first_no=1):
         self._expected = first_no
         self._partial = []
@@ -76,6 +77,8 @@ class GoBackNAcker(object):
             return expected
 
 class ExpDecayTimer(object):
+    """Compute timeout according to round-trip delay.
+    """
     def __init__(self, b=0.1, n=4):
         self.b = b
         self.n = n
@@ -102,6 +105,12 @@ class TCPTahoeFlow(Flow):
             env, flow_id, src_id, dest_id, data_mb, start_s)
 
         self.timeout = 0.1
+        self._timer = ExpDecayTimer()
+
+        # Max window size
+        self.n = 1
+        self.n_prev = self.n
+        self.window = simpy.Container(env, init=self.n)
 
     def make_packet(self):
         pass
