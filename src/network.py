@@ -5,7 +5,7 @@ import os
 from simpy_ext import SizedStore
 from device import Host, Link, Router, PipePair
 from packet import DataPacket
-from flow import Flow
+from flow import Flow, TCPTahoeFlow
 
 class Network(object):
 
@@ -37,7 +37,8 @@ class Network(object):
                 self._edges.append((fields[0], fields[2]))
             else:
                 fields[3:4] = map(float, fields[3:5])
-                f = Flow(self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
+                f = TCPTahoeFlow(
+                    self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
         stream.close()
 

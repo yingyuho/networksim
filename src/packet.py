@@ -41,8 +41,8 @@ class DataPacket(Packet):
         router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
-        print('{:.6f} : {} -> {} : Dta {}'.format(
-            host.env.now, self.src, self.dest, self.packet_no))
+        # print('{:.6f} : {} -> {} : Dta {}'.format(
+        #     host.env.now, self.src, self.dest, self.packet_no))
         n = host.get_data(self.flow_id, self.packet_no)
         if n is not None:
             host.send_except(AckPacket(self.dest, self.src, self.flow_id, n))

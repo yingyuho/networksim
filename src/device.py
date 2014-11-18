@@ -77,6 +77,12 @@ class Device(object):
     def activate_ports(self):
         raise NotImplementedError()
 
+    def init_routing(self):
+        """Send a routing packet to all the ports."""
+        rp = RoutingPacket(self.dev_id)
+        self.send_except(rp)
+        yield self.env.event().succeed()
+
 class Host(Device):
     """docstring for Host"""
 
@@ -87,7 +93,7 @@ class Host(Device):
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
 
-        self.env.process(self.sendRP())
+        self.env.process(self.init_routing())
 
     def receive(self, packet, from_id):
         packet.reach_host(self)
@@ -108,12 +114,6 @@ class Host(Device):
 
     def get_ack(self, flow_id, packet_no):
         self._flows[flow_id].get_ack(packet_no)
-
-    def sendRP(self):
-        """Send a routing packet to all the ports."""
-        rp = RoutingPacket(self.dev_id)
-        self.send_except(rp)
-        yield self.env.event().succeed()
 
 class BufferedCable(object):
     """docstring for BufferedCable
@@ -215,15 +215,6 @@ class Router(Device):
     def __init__(self, env, dev_id):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
-
-        self.env.process(self.sendRP())
-
-    def sendRP(self):
-        """Send a routing packet to all the ports."""
-        rp = RoutingPacket(self.dev_id)
-        self.send_except(rp)
-        yield self.env.event().succeed()
-        
 
     def receive(self, packet, from_id):
         """Recieves a packet from a port if the packet is a routing packet.

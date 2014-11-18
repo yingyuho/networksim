@@ -98,22 +98,34 @@ class ExpDecayTimer(object):
 
         return self.a + self.n * self.d
 
+_PktTrack = namedtuple(
+    'PktTrack', 
+    'packet_no timestamp timeout acked')
+
 class TCPTahoeFlow(Flow):
     """docstring for TCPTahoeFlow"""
     def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
-        super(AckPacket, self).__init__(
+        super(TCPTahoeFlow, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s)
 
         self.timeout = 0.1
         self._timer = ExpDecayTimer()
 
         # Max window size
-        self.n = 1
+        self.n = 10
         self.n_prev = self.n
         self.window = simpy.Container(env, init=self.n)
 
     def make_packet(self):
-        pass
+        i0 = self._first_packet
+        for i in range(i0, i0 + self.num_packets):
+            packet = DataPacket(self.src, self.dest, self.id, i)
+            yield self.window.get(1)
+            yield self.next_packet.put(packet)
+            print('{:.6f} : {} : Dta {}'.format(
+                self.env.now, self.id, i))
 
     def get_ack(self, packet_no):
-        pass
+        self.window.put(1)
+        print('{:.6f} : {} : Ack {}'.format(
+            self.env.now, self.id, packet_no))
