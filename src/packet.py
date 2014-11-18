@@ -76,12 +76,13 @@ class RoutingPacket(Packet):
 
     _size = 64
 
-    def __init__(self, arg):
+    def __init__(self, startId):
         super(RoutingPacket, self).__init__()
-        self.arg = arg
+        self.startId = startId
 
     def reach_router(self, router, port_id):
-        # TODO
+        if self.startId not in router.table:
+		router.table[self.startId] = port_id
         raise NotImplementedError()
         
     def reach_host(self, host):

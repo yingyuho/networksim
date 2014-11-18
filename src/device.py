@@ -199,10 +199,12 @@ class Router(Device):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
 
-        self.env.process(self.foo())
+        self.env.process(self.sendRP())
 
-    def foo(self):
-        # do something
+    def sendRP(self):
+	rp = RoutingPacket (self.dev_id)
+	
+
         yield self.env.event().succeed()
 
     def receive(self, packet, from_id):
