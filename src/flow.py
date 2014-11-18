@@ -23,21 +23,21 @@ class Flow(object):
 
         self.next_packet = simpy.Store(env)
 
-        env.process(self.make_packet())
+        env.process(self._schedule())
+
+    def _schedule(self):
+        yield self.env.timeout(self.start)
+        self.env.process(self.make_packet())
 
     def hello(self):
         yield self.env.event().succeed()
         print('Hello!')
 
     def make_packet(self):
-        yield self.env.timeout(self.start)
-        i = 0
+        i = 1
         while True:
             packet = DataPacket(self.src, self.dest, self.id, i)
-            t1 = self.next_packet.put(packet)
-            ret = yield t1 | self.env.event().succeed()
-            if t1 not in ret:
-                print('Failed to send Packet {0}'.format(i))
+            yield self.next_packet.put(packet)
             yield self.env.timeout(0.0005)
             i += 1
 
@@ -47,13 +47,11 @@ class Flow(object):
             self.env.now, self.id, packet_no))
 
 class GoBackNAcker(object):
-    def __init__(self, env, flow_id):
-        self.env = env
-        self.id = flow_id
-        self._expected = 1
+    def __init__(self, first_no=1):
+        self._expected = first_no
         self._partial = []
 
-    def _get(self, n):
+    def __call__(self, n):
         expected = self._expected
         partial = self._partial
 
@@ -77,14 +75,36 @@ class GoBackNAcker(object):
             self._expected = expected
             return expected
 
-    def _put(self, n):
-        pass
+class ExpDecayTimer(object):
+    def __init__(self, b=0.1, n=4):
+        self.b = b
+        self.n = n
+        self.a = None
+        self.d = None
 
-    def acknowledge(self, packet):
-        pass
+    def __call__(self, t):
+        a = self.a
+        d = self.d
+        b = self.b
+
+        if a is None:
+            self.a = self.d = t
+        else:
+            self.a = (1 - b) * a + b * t
+            self.d = (1 - b) * d + b * (t - a)
+
+        return self.a + self.n * self.d
 
 class TCPTahoeFlow(Flow):
     """docstring for TCPTahoeFlow"""
-    pass
+    def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
+        super(AckPacket, self).__init__(
+            env, flow_id, src_id, dest_id, data_mb, start_s)
 
-        
+        self.timeout = 0.1
+
+    def make_packet(self):
+        pass
+
+    def get_ack(self, packet_no):
+        pass

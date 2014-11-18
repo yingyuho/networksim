@@ -43,8 +43,9 @@ class DataPacket(Packet):
     def reach_host(self, host):
         print('{:.6f} : {} -> {} : Dta {}'.format(
             host.env.now, self.src, self.dest, self.packet_no))
-        host.send_except(
-            AckPacket(self.dest, self.src, self.flow_id, 1 + self.packet_no))
+        n = host.get_data(self.flow_id, self.packet_no)
+        if n is not None:
+            host.send_except(AckPacket(self.dest, self.src, self.flow_id, n))
 
 class AckPacket(Packet):
     """docstring for AckPacket"""

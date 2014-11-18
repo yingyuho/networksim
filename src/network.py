@@ -77,4 +77,4 @@ class Network(object):
 
 if __name__ == '__main__':
     tc0 = Network(None, 'tc0.txt')
-    tc0.run(1.05)
+    tc0.run(1.15)
