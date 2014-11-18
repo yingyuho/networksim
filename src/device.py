@@ -209,19 +209,16 @@ class Router(Device):
         sendToAllPorts(self, rp)
 	for p in self.ports:
             rp = RoutingPacket(p)
-            sendToAllPorts(self, rp)
+            self.send_except(self, rp)
         yield self.env.event().succeed()
+        
 
-    """ Sends the same routing packet to all ports"""
-
-    def sendToAllPorts(self, rp, arrivedId = None)
-        for p in self._ports:
-            if p is not arrivedId and p is not rp.startId:
-                self.send(rp, self._ports[p])
-
+    """ recieves a packet from a port
+        if the packet is a routingpacket
+        then, send the packet to all the other ports"""
     def receive(self, packet, from_id):
         packet.reach_router(self, from_id)
         if isinstance(RoutingPacket, packet):
-            sendToAllPorts(self, packet, arrivedId = from_id)
+            self.send_except(self, packet, except_id = from_id)
 	
         
