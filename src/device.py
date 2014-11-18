@@ -207,12 +207,27 @@ class Router(Device):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
 
-        self.env.process(self.foo())
+        self.env.process(self.sendRP())
 
-    def foo(self):
-        # do something
+    """ Sends a routing packet to all the ports """
+    def sendRP(self):
+        rp = RoutingPacket(self.dev_id)
+        sendToAllPorts(self, rp)
+	for p in self.ports:
+            rp = RoutingPacket(p)
+            sendToAllPorts(self, rp)
         yield self.env.event().succeed()
+
+    """ Sends the same routing packet to all ports"""
+
+    def sendToAllPorts(self, rp, arrivedId = None)
+        for p in self._ports:
+            if p is not arrivedId and p is not rp.startId:
+                self.send(rp, self._ports[p])
 
     def receive(self, packet, from_id):
         packet.reach_router(self, from_id)
+        if isinstance(RoutingPacket, packet):
+            sendToAllPorts(self, packet, arrivedId = from_id)
+	
         
