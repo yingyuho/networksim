@@ -206,7 +206,7 @@ class Router(Device):
     """ Sends a routing packet to all the ports """
     def sendRP(self):
         rp = RoutingPacket(self.dev_id)
-        sendToAllPorts(self, rp)
+        self.send_except(self, rp)
 	for p in self.ports:
             rp = RoutingPacket(p)
             self.send_except(self, rp)
