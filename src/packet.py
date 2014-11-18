@@ -75,8 +75,7 @@ class RoutingPacket(Packet):
 
     def reach_router(self, router, port_id):
         if self.startId not in router.table:
-		router.table[self.startId] = port_id
-        raise NotImplementedError()
+            router.table[self.startId] = port_id
         
     def reach_host(self, host):
         # Nothing, really

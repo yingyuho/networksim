@@ -204,11 +204,19 @@ class Router(Device):
         self.env.process(self.sendRP())
 
     def sendRP(self):
-	rp = RoutingPacket (self.dev_id)
-	
+	for a in _ports:
+	    rp = RoutingPacket(self.dev_id)
+	    sendToAllPorts(self, rp)
 
         yield self.env.event().succeed()
+    
+    def sendToAllPorts(self, rp)
+        for p in self._ports:
+            self.send(rp, self._ports[p])
 
     def receive(self, packet, from_id):
         packet.reach_router(self, from_id)
+        if isinstance(RoutingPacket, packet):
+            sendToAllPorts(self, packet)
+	
         
