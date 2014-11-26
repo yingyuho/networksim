@@ -218,11 +218,14 @@ class TCPTahoeFlow(Flow):
             assert timeout >= 0
             self._alarm = self.env.process(self.countdown(timeout))
 
-    def inc_allowance(self):
-        if self.debt > 0:
-            self.debt -= 1
+    def inc_allowance(self, n=1):
+        if self.debt >= n:
+            self.debt -= n
+        elif self.debt > 0:
+            self.allowance.put(n - self.debt)
+            self.debt = 0
         else:
-            self.allowance.put(1)
+            self.allowance.put(n)
 
     def get_ack(self, ack_no):
         packet_no = ack_no - 1
@@ -249,16 +252,12 @@ class TCPTahoeFlow(Flow):
         # Remove acked packets from queue
         for _ in range(pdiff):
             q.popleft()
-            self.inc_allowance()
+
+        self.inc_allowance(pdiff)
 
         deadlines = self._deadlines
 
         # Reset alarm
-        # if self._alarm is not None and deadlines[0][1] <= packet_no:
-        #     self._alarm.interrupt()
-        #     self._alarm = None
-        #     heapq.heappop(deadlines)
-
         self.set_alarm()
 
         # Increase N
