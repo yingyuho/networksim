@@ -266,3 +266,10 @@ class TCPTahoeFlow(Flow):
         self.inc_allowance()
         # print('{:.6f} {}'.format(self.env.now, packet_no))
         print('{:.6f} : {} : Ack {}'.format(self.env.now, self.id, packet_no))
+
+class FASTTCP(Flow):
+    """docstring for FASTTCP"""
+    def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
+        super(FASTTCP, self).__init__(
+            env, flow_id, src_id, dest_id, data_mb, start_s)
+        
