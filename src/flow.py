@@ -265,3 +265,76 @@ class TCPTahoeFlow(Flow):
         self.inc_allowance()
         # print('{:.6f} {}'.format(self.env.now, packet_no))
         print('{:.6f} : {} : Ack {}'.format(self.env.now, self.id, packet_no))
+
+class FASTTCP(Flow):
+    """docstring for FASTTCP"""
+    def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
+        super(FASTTCP, self).__init__(
+            env, flow_id, src_id, dest_id, data_mb, start_s)
+
+        self.baseRTT = 
+        self.RTT
+        self.w
+
+    def countdown(self, timeout):
+        try:
+            yield self.env.timeout(timeout)
+
+            # Alarm expires
+            self._alarm = None
+            deadlines = self._deadlines
+            packet_no = deadlines[0][1]
+            pktt = self.find_pkt_tracker(packet_no)
+            heapq.heappop(deadlines)
+
+            assert packet_no >= self._expected
+
+            # Half N
+            if packet_no == self._expected:
+                w = w/2
+
+            print('{:06f} : Timeout {}'.format(self.env.now, packet_no))
+
+            self.set_alarm()
+
+            packet = DataPacket(self.src, self.dest, self.id, packet_no)
+            self.inc_allowance()
+            yield self.allowance.get(1)
+
+            if packet_no >= self._expected:
+
+                yield self.next_packet.put(packet)
+
+                t = self.env.now
+                print('{:06f} : Retransmit {}'.format(t, packet_no))
+
+                pktt.timestamp = t
+                pktt.expiration = t + self.timeout
+
+                heapq.heappush(deadlines, (pktt.expiration, packet_no))
+
+                self.set_alarm()
+
+        except simpy.Interrupt:
+            pass
+
+    def get_ack(self, ack_no):
+        packet_no = ack_no - 1
+        self.w = w + 1/w
+
+    def make_packet(self):
+        i0 = self._first_packet
+        for i in range(i0, i0 + self.num_packets):
+            packet = DataPacket(self.src, self.dest, self.id, i)
+
+            yield self.allowance.get(1)
+            yield self.next_packet.put(packet)
+
+            t = self.env.now
+
+            self._out_packets.append(_PktTrack(i, t, t + self.timeout, False))
+
+            heapq.heappush(self._deadlines, (t + self.timeout, i))
+            self.set_alarm()
+
+            print('{:.6f} : {} : Dta {}'.format(self.env.now, self.id, i))
