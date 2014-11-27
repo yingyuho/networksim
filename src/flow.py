@@ -24,9 +24,10 @@ class Flow(object):
 
         self.next_packet = simpy.Store(env)
 
-        env.process(self._schedule())
 
-    def _schedule(self):
+        env.process(self._schedule_process())
+
+    def _schedule_process(self):
         yield self.env.timeout(self.start)
         self.env.process(self.make_packet())
 
@@ -119,8 +120,8 @@ class TCPTahoeFlow(Flow):
         self._timer = ExpDecayTimer()
 
         # Max window size
-        self.n = 1
-        self.allowance = simpy.Container(env, init=self.n)
+        self._cwnd = 1
+        self.allowance = simpy.Container(env, init=self._cwnd)
         self.debt = 0
 
         self._out_packets = deque()
@@ -161,10 +162,7 @@ class TCPTahoeFlow(Flow):
 
             # Half N
             if packet_no == self._expected:
-                dn = self.n - max(self.n // 2, 1)
-                self.debt += dn
-                self.n -= dn
-                # print('n = {}'.format(self.n))
+                self.cwnd = max(self.cwnd // 2, 1)
 
             print('{:06f} : Timeout {}'.format(self.env.now, packet_no))
 
@@ -227,6 +225,28 @@ class TCPTahoeFlow(Flow):
         else:
             self.allowance.put(n)
 
+    @property
+    def cwnd(self):
+        """Congestion window."""
+        return self._cwnd
+    @cwnd.setter
+    def cwnd(self, value):
+        old = self._cwnd
+
+        if value > old:
+            diff = value - old
+            if self.debt >= diff:
+                self.debt -= diff
+            elif self.debt > 0:
+                self.allowance.put(diff - self.debt)
+                self.debt = 0
+            else:
+                self.allowance.put(diff)
+        elif value < old:
+            self.debt += old - value
+
+        self._cwnd = value
+
     def get_ack(self, ack_no):
         packet_no = ack_no - 1
         q = self._out_packets
@@ -261,8 +281,7 @@ class TCPTahoeFlow(Flow):
         self.set_alarm()
 
         # Increase N
-        self.n += 1
-        self.inc_allowance()
+        self.cwnd += 1
         # print('{:.6f} {}'.format(self.env.now, packet_no))
         print('{:.6f} : {} : Ack {}'.format(self.env.now, self.id, packet_no))
 
