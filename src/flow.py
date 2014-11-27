@@ -376,5 +376,5 @@ class FASTTCP(Flow):
             alpha = 1
             wind_size = min(2 * self._cwnd, 
                 (1 - gamma)*self._cwnd + gamma(self.baseRTT/self.RTT * self._cwnd + alpha))
-            cwnd(self, wind_size)
+            self.cwnd(self, wind_size)
 
