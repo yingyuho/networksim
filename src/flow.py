@@ -293,8 +293,8 @@ class FASTTCP(Flow):
         self.avgRTT
 
         # window size
-        self.window_size = 1
-        self.allowance = simpy.Container(env, init=self.window_size)
+        self._cwnd = 1
+        self.allowance = simpy.Container(env, init=self._cwnd)
         self.debt = 0
 
         # calculated queue delay
@@ -337,7 +337,7 @@ class FASTTCP(Flow):
         # add packet acknowledgement to dictionary
         if packet_no in self._packet_acks.keys():
             self._packet_acks[packet_no] = self._packet_acks[packet_no] + 1
-        else
+        else:
             self._packet_acks[packet_no] = 1
 
         # Check if positive or negative ack
@@ -355,18 +355,18 @@ class FASTTCP(Flow):
             pktt.expiration = t + self.timeout
         
         # Positive ack
-        else
+        else:
             self.RTT = self.env.now - pktt.timestamp
             if self.RTT < self.baseRTT:
                 self.baseRTT = self.RTT
-            weight = min(3/self.window_size, 1/4)
+            weight = min(3/self._cwnd, 1/4)
             self.avgRTT = (1 - weight * self.avgRTT + weight * self.RTT)
             self.queue_delay = self.avgRTT - self.baseRTT
 
             # Window control
             gamma = .5
             alpha = 1
-            self.window_size = min(2 * self.window_size, 
-                (1 - gamma)*self.window_size + gamma(self.baseRTT/self.RTT * self.window_size + alpha))
-            inc_allowance(self, self.window_size)
+            wind_size = min(2 * self._cwnd, 
+                (1 - gamma)*self._cwnd + gamma(self.baseRTT/self.RTT * self._cwnd + alpha))
+            self.cwnd(self, wind_size)
 
