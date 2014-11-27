@@ -272,55 +272,26 @@ class FASTTCP(Flow):
         super(FASTTCP, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s)
 
-        self.baseRTT = 
-        self.RTT
-        self.w
+        # minimum RTT
+        self.baseRTT = 1
 
-    def countdown(self, timeout):
-        try:
-            yield self.env.timeout(timeout)
+        # current RTT
+        self.RTT = 1
 
-            # Alarm expires
-            self._alarm = None
-            deadlines = self._deadlines
-            packet_no = deadlines[0][1]
-            pktt = self.find_pkt_tracker(packet_no)
-            heapq.heappop(deadlines)
+        # average RTT
+        self.avgRTT
 
-            assert packet_no >= self._expected
+        # window size
+        self.window_size = 1
+        self.allowance = simpy.Container(env, init=self.window_size)
+        self.debt = 0
 
-            # Half N
-            if packet_no == self._expected:
-                w = w/2
+        # calculated queue delay
+        self.queue_delay = 0
 
-            print('{:06f} : Timeout {}'.format(self.env.now, packet_no))
-
-            self.set_alarm()
-
-            packet = DataPacket(self.src, self.dest, self.id, packet_no)
-            self.inc_allowance()
-            yield self.allowance.get(1)
-
-            if packet_no >= self._expected:
-
-                yield self.next_packet.put(packet)
-
-                t = self.env.now
-                print('{:06f} : Retransmit {}'.format(t, packet_no))
-
-                pktt.timestamp = t
-                pktt.expiration = t + self.timeout
-
-                heapq.heappush(deadlines, (pktt.expiration, packet_no))
-
-                self.set_alarm()
-
-        except simpy.Interrupt:
-            pass
-
-    def get_ack(self, ack_no):
-        packet_no = ack_no - 1
-        self.w = w + 1/w
+        # queue used to check for packet loss. should always be 3 elements
+        # long. contains the last three packet numbers
+        self._packet_acks = dict()
 
     def make_packet(self):
         i0 = self._first_packet
@@ -338,3 +309,53 @@ class FASTTCP(Flow):
             self.set_alarm()
 
             print('{:.6f} : {} : Dta {}'.format(self.env.now, self.id, i))
+
+    def inc_allowance(self, n=1):
+        if self.debt >= n:
+            self.debt -= n
+        elif self.debt > 0:
+            self.allowance.put(n - self.debt)
+            self.debt = 0
+        else:
+            self.allowance.put(n)
+
+    def get_ack(self, ack_no):
+        packet_no = ack_no - 1
+        pktt = self.find_pkt_tracker(packet_no)
+
+        # add packet acknowledgement to dictionary
+        if packet_no in self._packet_acks.keys():
+            self._packet_acks[packet_no] = self._packet_acks[packet_no] + 1
+        else
+            self._packet_acks[packet_no] = 1
+
+        # Check if positive or negative ack
+        # Negative ack
+        if self._packet_acks[packet_no] == 3:
+            packet = DataPacket(self.src, self.dest, self.id, packet_no)
+
+            yield self.allowance.get(1)
+            yield self.next_packet.put(packet)
+
+            t = self.env.now
+            print('{:06f} : Retransmit {}'.format(t, packet_no))
+
+            pktt.timestamp = t
+            pktt.expiration = t + self.timeout
+        
+        # Positive ack
+        else
+            self.RTT = self.env.now - pktt.timestamp
+            if self.RTT < self.baseRTT:
+                self.baseRTT = self.RTT
+            weight = min(3/self.window_size, 1/4)
+            self.avgRTT = (1 - weight * self.avgRTT + weight * self.RTT)
+            self.queue_delay = self.avgRTT - self.baseRTT
+
+            # Window control
+            gamma = .5
+            alpha = 1
+            self.window_size = min(2 * self.window_size, 
+                (1 - gamma)*self.window_size + gamma(self.baseRTT/self.RTT * self.window_size + alpha))
+            inc_allowance(self, self.window_size)
+
