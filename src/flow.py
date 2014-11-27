@@ -55,6 +55,15 @@ class Flow(object):
 
         self._cwnd = value
 
+    def inc_balance(self, n=1):
+        if self._cwnd_debt >= n:
+            self._cwnd_debt -= n
+        elif self._cwnd_debt > 0:
+            self._cwnd_balance.put(n - self._cwnd_debt)
+            self._cwnd_debt = 0
+        else:
+            self._cwnd_balance.put(n)
+
     def _schedule_process(self):
         yield self.env.timeout(self.start)
         self.env.process(self.make_packet())
@@ -192,7 +201,7 @@ class TCPTahoeFlow(Flow):
             self.set_alarm()
 
             packet = DataPacket(self.src, self.dest, self.id, packet_no)
-            self.inc_allowance()
+            self.inc_balance()
             yield self.allowance.get(1)
 
             if packet_no >= self._expected:
@@ -265,7 +274,7 @@ class TCPTahoeFlow(Flow):
         for _ in range(pdiff):
             q.popleft()
 
-        self.inc_allowance(pdiff)
+        self.inc_balance(pdiff)
 
         deadlines = self._deadlines
 
