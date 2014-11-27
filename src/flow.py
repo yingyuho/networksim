@@ -24,8 +24,36 @@ class Flow(object):
 
         self.next_packet = simpy.Store(env)
 
+        # Transmit window access control
+        self._cwnd = 1
+        self._cwnd_balance = simpy.Container(env, init=self._cwnd)
+        self.allowance = self._cwnd_balance # TODO: remove later
+        self._cwnd_debt = 0
 
         env.process(self._schedule_process())
+
+    @property
+    def cwnd(self):
+        """Congestion window."""
+        return self._cwnd
+    @cwnd.setter
+    def cwnd(self, value):
+        old = self._cwnd
+
+        if value > old:
+            diff = value - old
+            transfer = min(value - old, self._cwnd_debt)
+            if self._cwnd_debt >= diff:
+                self._cwnd_debt -= diff
+            elif self._cwnd_debt > 0:
+                self._cwnd_balance.put(diff - self._cwnd_debt)
+                self._cwnd_debt = 0
+            else:
+                self._cwnd_balance.put(diff)
+        elif value < old:
+            self._cwnd_debt += old - value
+
+        self._cwnd = value
 
     def _schedule_process(self):
         yield self.env.timeout(self.start)
@@ -119,11 +147,6 @@ class TCPTahoeFlow(Flow):
         self.timeout = 1.0
         self._timer = ExpDecayTimer()
 
-        # Max window size
-        self._cwnd = 1
-        self.allowance = simpy.Container(env, init=self._cwnd)
-        self.debt = 0
-
         self._out_packets = deque()
         self._expected = 1
 
@@ -215,37 +238,6 @@ class TCPTahoeFlow(Flow):
             # print(self.env.now)
             assert timeout >= 0
             self._alarm = self.env.process(self.countdown(timeout))
-
-    def inc_allowance(self, n=1):
-        if self.debt >= n:
-            self.debt -= n
-        elif self.debt > 0:
-            self.allowance.put(n - self.debt)
-            self.debt = 0
-        else:
-            self.allowance.put(n)
-
-    @property
-    def cwnd(self):
-        """Congestion window."""
-        return self._cwnd
-    @cwnd.setter
-    def cwnd(self, value):
-        old = self._cwnd
-
-        if value > old:
-            diff = value - old
-            if self.debt >= diff:
-                self.debt -= diff
-            elif self.debt > 0:
-                self.allowance.put(diff - self.debt)
-                self.debt = 0
-            else:
-                self.allowance.put(diff)
-        elif value < old:
-            self.debt += old - value
-
-        self._cwnd = value
 
     def get_ack(self, ack_no):
         packet_no = ack_no - 1
