@@ -326,7 +326,7 @@ class FASTTCP(Flow):
         # add packet acknowledgement to dictionary
         if packet_no in self._packet_acks.keys():
             self._packet_acks[packet_no] = self._packet_acks[packet_no] + 1
-        else
+        else:
             self._packet_acks[packet_no] = 1
 
         # Check if positive or negative ack
@@ -344,7 +344,7 @@ class FASTTCP(Flow):
             pktt.expiration = t + self.timeout
         
         # Positive ack
-        else
+        else:
             self.RTT = self.env.now - pktt.timestamp
             if self.RTT < self.baseRTT:
                 self.baseRTT = self.RTT
@@ -355,7 +355,9 @@ class FASTTCP(Flow):
             # Window control
             gamma = .5
             alpha = 1
+            old_size = self.window_size
             self.window_size = min(2 * self.window_size, 
                 (1 - gamma)*self.window_size + gamma(self.baseRTT/self.RTT * self.window_size + alpha))
+            self.debt += old_size - self.window_size
             inc_allowance(self, self.window_size)
 
