@@ -175,5 +175,6 @@ class Graphics(object):
         
         
 if __name__ == '__main__':
-    graphs= Graphics()  
+    graphs= Graphics()
+    
 

@@ -80,7 +80,7 @@ class Device(object):
 
     def init_routing(self):
         """Send a routing packet to all the ports."""
-        rp = RoutingPacket(self.dev_id)
+        rp = RoutingPacket(self.dev_id, self.env.now)
         self.send_except(rp)
         yield self.env.event().succeed()
 

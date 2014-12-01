@@ -88,7 +88,10 @@ class RoutingPacket(Packet):
         
     def reach_host(self, host):
         if self.start_id == None:
-            self.recorded_time = self.recorded_time - host.env.now()
-            self.start_id = host.dev_id();
+            if self.recorded_time == None:
+                self.recorded_time = host.env.now
+            else:
+                self.recorded_time = host.env.now - self.recorded_time
+            self.start_id = host.dev_id;
+            print(host.dev_id)
             host.send(self, self.router_start_id)
-        
