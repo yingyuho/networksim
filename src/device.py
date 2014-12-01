@@ -94,8 +94,6 @@ class Host(Device):
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
 
-        self.env.process(self.init_routing())
-
     def receive(self, packet, from_id):
         packet.reach_host(self)
 
@@ -218,6 +216,8 @@ class Router(Device):
     def __init__(self, env, dev_id):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
+        self.timeTable = {}
+        self.env.process(self.init_routing())
 
     def receive(self, packet, from_id):
         """Recieves a packet from a port if the packet is a routing packet.

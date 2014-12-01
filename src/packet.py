@@ -70,16 +70,25 @@ class RoutingPacket(Packet):
 
     _size = 64
 
-    def __init__(self, start_id):
+    def __init__(self, router_start_id, recorded_time):
         super(RoutingPacket, self).__init__()
-        self.start_id = start_id
+        self.router_start_id = router_start_id
+        self.recorded_time = recorded_time
+        self.start_id = None
+        self.recorded_time = None
 
     def reach_router(self, router, port_id):
-        if self.start_id not in router.table:
-            router.table[self.start_id] = port_id
+        if self.router_start_id == router.dev_id:
+            if self.start_id not in router.table \
+               or router.timeTable[self.start_id] > self.recorded_time:
+                router.table[self.start_id] = port_id
+                router.timeTable[self.start_id] = self.recorded_time
+        else:
             router.send_except(self, except_id=port_id)
         
     def reach_host(self, host):
-        # Nothing, really
-        pass
+        if self.start_id == None:
+            self.recorded_time = self.recorded_time - host.env.now()
+            self.start_id = host.dev_id();
+            host.send(self, self.router_start_id)
         
