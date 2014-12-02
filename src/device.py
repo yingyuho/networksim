@@ -81,7 +81,7 @@ class Device(object):
 
     def init_routing(self):
         """Send a routing packet to all the ports."""
-        rp = RoutingPacket(self.dev_id)
+        rp = RoutingPacket(self.dev_id, self.env.now)
         self.send_except(rp)
         yield self.env.event().succeed()
 
@@ -94,8 +94,6 @@ class Host(Device):
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
-
-        self.env.process(self.init_routing())
 
     def receive(self, packet, from_id):
         packet.reach_host(self)
@@ -224,6 +222,8 @@ class Router(Device):
     def __init__(self, env, dev_id):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
+        self.timeTable = {}
+        self.env.process(self.init_routing())
 
     def receive(self, packet, from_id):
         """Recieves a packet from a port if the packet is a routing packet.
