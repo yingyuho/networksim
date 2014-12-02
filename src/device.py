@@ -5,6 +5,7 @@ from operator import attrgetter
 
 import simpy
 
+import message as msg
 from simpy_ext import SizedStore
 from flow import GoBackNAcker
 from packet import RoutingPacket
@@ -123,10 +124,14 @@ class BufferedCable(object):
         rate: Link rate in Mbps.
         delay: Link delay in milliseconds.
         buf_size: Link buffer capacity in kilobytes.
+        io: 
 
     """
-    def __init__(self, env, rate, delay, buf_size):
+    def __init__(self, env, link_id, src_id, rate, delay, buf_size):
         self.env = env
+
+        self.link_id = link_id
+        self.src_id = src_id
 
         self.rate = rate
         self.delay = delay
@@ -140,10 +145,10 @@ class BufferedCable(object):
 
         self.io = PipePair(simpy.Store(env), simpy.Store(env))
 
-        self.env.process(self.feed_buffer())
-        self.env.process(self.feed_cable())
+        self.env.process(self._feed_buffer())
+        self.env.process(self._feed_cable())
 
-    def feed_buffer(self):
+    def _feed_buffer(self):
         while True:
             packet = yield self.io.pipe_in.get()
             # print('At Packet {0}'.format(packet.packet_no))
@@ -157,13 +162,13 @@ class BufferedCable(object):
                     # print('{:06f} : Packet {} is lost'.format(
                     #     self.env.now, packet.packet_no))
 
-    def feed_cable(self):
+    def _feed_cable(self):
         while True:
             packet = yield self._packet_buffer.get()
             yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
-            self.env.process(self.latency(packet))
+            self.env.process(self._latency(packet))
 
-    def latency(self, packet):
+    def _latency(self, packet):
         yield self.env.timeout(self.delay / 1.0E3)
         self.io.pipe_out.put(packet)
 
@@ -193,7 +198,8 @@ class Link(Device):
         super(Link, self).add_port(adj_id, port)
 
         self._cables[adj_id] = BufferedCable(
-            self.env, self.rate, self.delay, self.buf_size)
+            self.env, self.dev_id, adj_id, 
+            self.rate, self.delay, self.buf_size)
 
         def listener(adj_id):
             while True:
