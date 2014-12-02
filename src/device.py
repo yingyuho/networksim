@@ -19,7 +19,14 @@ class PipePair(object):
         self.pipe_out = pipe_out
 
 class Device(object):
-    """docstring for Device"""
+    """Superclass for Host, Router, and Link.
+
+    Attributes:
+        env: Simpy environment where the Device is stored.
+        _dev_id: ID of the device.
+        _ports: The ports available on the Device, where other devices are 
+            attached.
+        _max_degree: The maximum number of Devices that can be attached."""
 
     def __init__(self, env, dev_id):
         self.env = env
@@ -41,11 +48,11 @@ class Device(object):
     @property
     def max_degree(self):
         """Maximal number of other devices this device can connect to
-        or None if there is no upper limit.
-        """
+        or None if there is no upper limit."""
         return self._max_degree
 
     def _add_packet_listener(self, adj_id, port):
+        """Adds a listener to the port. Used in add_port."""
         def listener():
             while True:
                 packet = yield port.pipe_in.get()
@@ -66,6 +73,7 @@ class Device(object):
         self._add_packet_listener(adj_id, port)
 
     def send(self, packet, to_id):
+        """Sends packet from the current Device to the other Device."""
         self._ports[to_id].pipe_out.put(packet)
 
     def send_except(self, packet, except_id=None):
@@ -74,9 +82,11 @@ class Device(object):
                 self.send(packet, adj_id)
 
     def receive(self, packet, from_id):
+        """Receives packet for the current Device."""
         raise NotImplementedError()
 
     def activate_ports(self):
+        """Activates ports for the current Device."""
         raise NotImplementedError()
 
     def init_routing(self):
@@ -86,22 +96,31 @@ class Device(object):
         yield self.env.event().succeed()
 
 class Host(Device):
-    """docstring for Host"""
+    """The Host class represents the hosts in the network.
+
+    Attributes:
+        flows: A list of the flows that send packets from this Host.
+        _acker: 
+        """
 
     _max_degree = 1
 
     def __init__(self, env, dev_id):
+        """Constructor for Host object."""
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
 
     def receive(self, packet, from_id):
+        """Receives packets """
         packet.reach_host(self)
 
     def add_flow(self, flow):
+        """Add/initiate flow to Host."""
         self._flows[flow.id] = flow
 
         def send_packet():
+            """Sends packets according to flow."""
             while True:
                 packet = yield flow.next_packet.get()
                 for adj_id in self._ports:
@@ -110,13 +129,16 @@ class Host(Device):
         self.env.process(send_packet())
 
     def get_data(self, flow_id, packet_no):
+        """Gets acknowledgement data for packets."""
         return self._acker[flow_id](packet_no)
 
     def get_ack(self, flow_id, packet_no):
+        """Gets acknowledgement """
         self._flows[flow_id].get_ack(packet_no)
 
 class BufferedCable(object):
-    """docstring for BufferedCable
+    """The general object for a one-way connector between objects. Includes 
+        buffers for packets.
 
     Attributes:
         rate: Link rate in Mbps.
@@ -171,12 +193,13 @@ class BufferedCable(object):
         self.io.pipe_out.put(packet)
 
 class Link(Device):
-    """Full-duplex link
+    """Full-duplex link between hosts and routers.
 
     Attributes:
         rate: Link rate in Mbps. Do not modify.
         delay: Link delay in milliseconds. Do not modify.
         buf_size: Link buffer capacity in kilobytes. Do not modify.
+        _cables: 
 
     """
 
@@ -212,14 +235,15 @@ class Link(Device):
         self._cables[from_id].io.pipe_in.put(packet)
         
 class Router(Device):
-    """docstring for Router
+    """Router creates the router objects in the network.
 
     Attributes:
         table: A dictionary mapping dest_id to link_id.
-
+        timeTable: 
     """
 
     def __init__(self, env, dev_id):
+        """Constructor for a Router."""
         super(Router, self).__init__(env, dev_id)
         self.table = {}
         self.timeTable = {}
