@@ -5,7 +5,6 @@ from operator import attrgetter
 
 import simpy
 
-import message as msg
 from simpy_ext import SizedStore
 from flow import GoBackNAcker
 from packet import RoutingPacket
