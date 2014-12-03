@@ -187,7 +187,7 @@ class BufferedCable(object):
             with self._packet_buffer.put(packet) as req:
                 ret = yield req | self.env.event().succeed()
                 if req in ret:
-                    print('{:06f} buffer_up {} {}'.format(
+                    print('{:06f} buffer_diff {} {}'.format(
                         self.env.now, 
                         self.link_id, 
                         packet.size))
@@ -202,19 +202,14 @@ class BufferedCable(object):
         while True:            
             packet = yield self._packet_buffer.get()
 
-            print('{:06f} buffer_down {} {}'.format(
+            print('{:06f} buffer_diff {} {}'.format(
                 self.env.now, 
                 self.link_id, 
-                packet.size))
-
-            print('{:06f} cable_up {} {}'.format(
-                self.env.now, 
-                self.link_id, 
-                packet.size))
+                -1 * packet.size))
 
             yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
 
-            print('{:06f} cable_down {} {}'.format(
+            print('{:06f} transmission {} {}'.format(
                 self.env.now, 
                 self.link_id, 
                 packet.size))
