@@ -173,7 +173,7 @@ class Graphics(object):
             self.link_flow_rate_plot.relim()
             self.link_flow_rate_plot.autoscale_view()
             
-        elif args[1]=="packet_RTT":
+        elif args[1]=="packet_rtt":
             if(id in self.packet_RTT_dict.keys()):
                 currTime, currValue=self.packet_RTT_dict[id]
                 currTime.append(float(time))

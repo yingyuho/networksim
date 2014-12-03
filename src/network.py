@@ -5,13 +5,43 @@ import os
 from simpy_ext import SizedStore
 from device import Host, Link, Router, PipePair
 from packet import DataPacket
-from flow import Flow, TCPTahoeFlow
+from flow import Flow, TCPTahoeFlow, FASTTCP
 
 class Network(object):
 
-    """docstring for Network"""
+    """The Network Simulator is initialized here.
+
+    Attributes:
+        hosts: List of all Host objects in the network.
+        routers: List of all Router objects in the network.
+        links: List of all Link objects in the network.
+        flows: List of all Flow objects in the network.
+        _nodes: Contains additional information about each Host/Router.
+        _edges: Contains additional information about each Link.
+    """
+
+    def __init__(self, env, filename):
+        """Constructor for the Network object"""
+        super(Network, self).__init__()
+
+        self.hosts = []
+        self.routers = []
+        self.links = []
+        self.flows = []
+
+        self._nodes = {}
+        self._edges = []
+
+        # Initiates new environment to simulate network
+        if env is None:
+            env = simpy.Environment()
+        self.env = env
+
+        
+        self.parse_network(filename)
 
     def parse_network(self, filename):
+        """This method parses the network from the provided text file."""
         curpath = os.path.dirname(__file__)
         filepath = os.path.abspath(os.path.join(curpath, "..", "testcases", filename))
         stream = open(filepath,'r')
@@ -51,31 +81,15 @@ class Network(object):
             self._nodes[e[0]].add_port(e[1], port0)
             self._nodes[e[1]].add_port(e[0], port1)
 
+        # Add Flows to Hosts
         for f in self.flows:
             self._nodes[f.src].add_flow(f)
 
-    def __init__(self, env, filename):
-        super(Network, self).__init__()
-
-        self.hosts = []
-        self.routers = []
-        self.links = []
-        self.flows = []
-
-        self._nodes = {}
-        self._edges = []
-
-        if env is None:
-            env = simpy.Environment()
-        self.env = env
-
-        self.parse_network(filename)
-
-
     def run(self, until=None):
+        """Initiates run of simulation environment."""
         return self.env.run(until=until)
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, 'tc2.txt')
+    tc0 = Network(None, 'tc0.txt')
     tc0.run(1.0 + 50)
