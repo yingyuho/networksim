@@ -40,11 +40,13 @@ def main(freq=1):
             else:
                 pass
 
-        for link_id, amount in buffer_level.iteritems():
-            # TODO: Convert KB/s to Mbps
+        for link_id, amount in link_flow_sum.iteritems():
             print('{} link_flow_rate {} {}'.format(t, link_id, 
-                amount / t))
+                amount * 8 / 1.0E6 * freq))
 
+        for link_id, amount in buffer_level.iteritems():
+            print('{} buf_level {} {}'.format(t, link_id, 
+                amount / 1000))
 
 if __name__ == '__main__':
     main()
