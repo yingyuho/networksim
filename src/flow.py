@@ -235,6 +235,7 @@ class BaseFlow(object):
             pktt.acked = True
 
             # Update timeout
+            pktt.timestamp = timestamp
             delay = self.env.now - timestamp
             print('{:.6f} packet_rtt {} {}'.format(
                 self.env.now, self.id, delay))
@@ -418,12 +419,67 @@ class TCPRenoFlow(BaseFlow):
         states = {
             'ss':   TCPRenoSS,
             'ca':   TCPRenoCA,
-            'ret':  TCPRenoRet,
+            'ret':  TCPTahoeRet,
             'frfr': TCPRenoFRFR }
 
         super(TCPRenoFlow, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s,
             states, 'ss')
+
+class FastTCPCA(TCPRenoSS):
+
+    def event_ack(self, packet_info):
+        cont = self.context
+        cont.curr_rtt = cont.env.now - packet_info.timestamp
+
+        if cont.curr_rtt < cont.base_rtt:
+            cont.base_rtt = cont.curr_rtt
+
+        cwnd = cont.cwnd
+
+        weight = min(3 / cwnd, 1/4)
+
+        if cont.avg_rtt is None:
+            cont.avg_rtt = cont.curr_rtt
+
+        cont.avg_rtt = (1 - weight * cont.avg_rtt + weight * cont.curr_rtt)
+
+        cont.queue_delay = cont.avg_rtt - cont.base_rtt
+
+        # Exp decay factor
+        gamma = 0.1
+        # Desired number of packets in buffer
+        alpha = 5
+        
+        ratio = cont.base_rtt / cont.curr_rtt
+        new_cwnd = (1 - gamma) * cwnd + gamma * (ratio * cwnd + alpha)
+        cont.cwnd = min(2 * cwnd, new_cwnd)
+
+class FastTCPFlow(BaseFlow):
+
+    def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
+
+        states = {
+            'ss':   TCPRenoSS,
+            'ca':   FastTCPCA,
+            'ret':  TCPTahoeRet,
+            'frfr': TCPRenoFRFR }
+
+        super(FastTCPFlow, self).__init__(
+            env, flow_id, src_id, dest_id, data_mb, start_s,
+            states, 'ss')
+
+        # Minimum RTT
+        self.base_rtt = 1
+
+        # Current RTT
+        self.curr_rtt = 1
+
+        # Average RTT
+        self.avg_rtt = None
+
+        # Calculated queue delay
+        self.queue_delay = 0
 
 class GoBackNAcker(object):
     """Used by the client-side of flow to find the ack number.
