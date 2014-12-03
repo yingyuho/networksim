@@ -96,6 +96,10 @@ class BaseFlow(object):
         self._deadlines = []
         self._last_ss = 0.0
 
+        # RTT
+        self.base_rtt = 1
+        self.curr_rtt = 1
+
         # Dup ack counter
         self.last_pkinfo = None
         self._ndup = 0
@@ -240,6 +244,11 @@ class BaseFlow(object):
             print('{:.6f} packet_rtt {} {}'.format(
                 self.env.now, self.id, delay))
             self.timeout = self._timer(delay)
+
+            self.curr_rtt = delay
+
+            if delay < self.base_rtt:
+                self.base_rtt = delay
 
             # Shift transmission window
             pdiff = packet_no - expected + 1
@@ -430,10 +439,6 @@ class FastTCPCA(TCPRenoSS):
 
     def event_ack(self, packet_info):
         cont = self.context
-        cont.curr_rtt = cont.env.now - packet_info.timestamp
-
-        if cont.curr_rtt < cont.base_rtt:
-            cont.base_rtt = cont.curr_rtt
 
         cwnd = cont.cwnd
 
@@ -447,9 +452,9 @@ class FastTCPCA(TCPRenoSS):
         cont.queue_delay = cont.avg_rtt - cont.base_rtt
 
         # Exp decay factor
-        gamma = 0.1
+        gamma = 0.05
         # Desired number of packets in buffer
-        alpha = 5
+        alpha = 3
         
         ratio = cont.base_rtt / cont.curr_rtt
         new_cwnd = (1 - gamma) * cwnd + gamma * (ratio * cwnd + alpha)
@@ -468,12 +473,6 @@ class FastTCPFlow(BaseFlow):
         super(FastTCPFlow, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s,
             states, 'ss')
-
-        # Minimum RTT
-        self.base_rtt = 1
-
-        # Current RTT
-        self.curr_rtt = 1
 
         # Average RTT
         self.avg_rtt = None
@@ -517,7 +516,7 @@ class GoBackNAcker(object):
 class ExpDecayTimer(object):
     """Compute timeout according to round-trip delay.
     """
-    def __init__(self, b=0.1, n=4, c=1.1):
+    def __init__(self, b=0.1, n=4, c=1.25):
         self.b = b
         self.n = n
         self.a = None
