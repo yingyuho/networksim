@@ -74,29 +74,29 @@ class RoutingPacket(Packet):
 
 
     def __init__(self, router_start_id, recorded_time):
-    """
-    The routing packets start at the router
-    The router_start_id is the ID of the router.
-    The recorded_time is initially the time that the routing packet is sent.
-    The host_id is the id of the host.
-    """
+        """
+        The routing packets start at the router
+        The router_start_id is the ID of the router.
+        The recorded_time is initially the time that the routing packet is sent.
+        The host_id is the id of the host.
+        """
         super(RoutingPacket, self).__init__()
         self.router_start_id = router_start_id
         self.recorded_time = recorded_time
         self.host_id = None
     
     def reach_router(self, router, port_id):
-    """
-    When the packet reaches a router, it checks to see 
-    if the packet initialized there.
-    If it started at that router, then it checks to see if
-    the host_id is already in the table or if the time 
-    is faster than the initial arrival. If either case is true,
-    then we add the entry port as the destination for the packets.
-    We also keep track of the smallest time that it has arrived at so far.
-    If it's not the router that it started in, it sends to every port except
-    the entry port. 
-    """
+        """
+        When the packet reaches a router, it checks to see 
+        if the packet initialized there.
+        If it started at that router, then it checks to see if
+        the host_id is already in the table or if the time 
+        is faster than the initial arrival. If either case is true,
+        then we add the entry port as the destination for the packets.
+        We also keep track of the smallest time that it has arrived at so far.
+        If it's not the router that it started in, it sends to every port except
+        the entry port. 
+        """
         if self.router_start_id == router.dev_id:
             if self.host_id not in router.table \
                or router.timeTable[self.host_id] > self.recorded_time:
@@ -106,11 +106,11 @@ class RoutingPacket(Packet):
             router.send_except(self, except_id=port_id)
     
     def reach_host(self, host):
-    """
-    If it arrives at a host, then it finds the time it took to get to the host.
-    It also stores the host_id. If the host_id is not None,
-    then it doesn't do anything.
-    """
+        """
+        If it arrives at a host, then it finds the time it took to get to the host.
+        It also stores the host_id. If the host_id is not None,
+        then it doesn't do anything.
+        """
         if self.host_id == None:
             self.recorded_time = host.env.now - self.recorded_time
             self.host_id = host.dev_id;

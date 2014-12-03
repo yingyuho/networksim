@@ -125,14 +125,25 @@ class Host(Device):
                 for adj_id in self._ports:
                     self.send(packet, adj_id)
 
+                print('{:.6f} send_data {} {} {}'.format(
+                    self.env.now, flow.id, self.dev_id, packet.packet_no))
+
         self.env.process(send_packet())
 
     def get_data(self, flow_id, packet_no):
         """Gets acknowledgement data for packets."""
-        return self._acker[flow_id](packet_no)
+        print('{:.6f} receive_data {} {} {}'.format(
+            self.env.now, flow_id, self.dev_id, packet_no))
+        n = self._acker[flow_id](packet_no)
+        if n is not None:
+            print('{:.6f} send_ack {} {} {}'.format(
+                self.env.now, flow_id, self.dev_id, packet_no))
+        return n
 
     def get_ack(self, flow_id, packet_no):
         """Gets acknowledgement """
+        print('{:.6f} receive_ack {} {} {}'.format(
+            self.env.now, flow_id, self.dev_id, packet_no))
         self._flows[flow_id].get_ack(packet_no)
 
 class BufferedCable(object):
@@ -175,16 +186,39 @@ class BufferedCable(object):
 
             with self._packet_buffer.put(packet) as req:
                 ret = yield req | self.env.event().succeed()
-                if req not in ret:
-                    # TODO: Packet loss
-                    pass
-                    # print('{:06f} : Packet {} is lost'.format(
-                    #     self.env.now, packet.packet_no))
+                if req in ret:
+                    print('{:06f} buffer_up {} {}'.format(
+                        self.env.now, 
+                        self.link_id, 
+                        packet.size))
+                else:
+                    print('{:06f} packet_loss {} {} {}'.format(
+                        self.env.now, 
+                        self.link_id, 
+                        packet.flow_id, 
+                        packet.packet_no))
 
     def _feed_cable(self):
-        while True:
+        while True:            
             packet = yield self._packet_buffer.get()
+
+            print('{:06f} buffer_down {} {}'.format(
+                self.env.now, 
+                self.link_id, 
+                packet.size))
+
+            print('{:06f} cable_up {} {}'.format(
+                self.env.now, 
+                self.link_id, 
+                packet.size))
+
             yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
+
+            print('{:06f} cable_down {} {}'.format(
+                self.env.now, 
+                self.link_id, 
+                packet.size))
+
             self.env.process(self._latency(packet))
 
     def _latency(self, packet):

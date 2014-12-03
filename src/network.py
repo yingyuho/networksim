@@ -5,7 +5,7 @@ import os
 from simpy_ext import SizedStore
 from device import Host, Link, Router, PipePair
 from packet import DataPacket
-from flow import Flow, TCPTahoeFlow
+from flow import Flow, TCPTahoeFlow, FASTTCP
 
 class Network(object):
 
@@ -77,5 +77,5 @@ class Network(object):
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, 'tc2.txt')
-    tc0.run(1.0 + 50)
+    tc0 = Network(None, 'tc0.txt')
+    tc0.run(1.0 + 20)
