@@ -125,8 +125,9 @@ class Host(Device):
                 for adj_id in self._ports:
                     self.send(packet, adj_id)
 
-                print('{:.6f} send_data {} {} {}'.format(
-                    self.env.now, flow.id, self.dev_id, packet.packet_no))
+                print('{:.6f} send_data {} {} {} {}'.format(
+                    self.env.now, flow.id, self.dev_id, 
+                    packet.size, packet.packet_no))
 
         self.env.process(send_packet())
 
