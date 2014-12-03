@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from Tkinter import Tk, Label, BOTH
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
@@ -119,8 +120,7 @@ class Graphics(object):
         #the existing graph, and regraphs it, but that is unnecessarily slow
         
         
-        
-        if args[1]=="pkt_loss":
+        if args[1]=="packet_loss_rate":
             if(id in self.pkt_loss_dict.keys()):
                 currTime, currValue=self.pkt_loss_dict[id]
                 currTime.append(float(time))
@@ -128,14 +128,6 @@ class Graphics(object):
                 self.pkt_loss_dict[id]=(currTime, currValue)
             else:
                 self.pkt_loss_dict[id]=([float(time)],[value])
-            self.packet_loss_plot.clear()
-            for id in self.pkt_loss_dict.keys():
-                self.packet_loss_plot.plot(self.pkt_loss_dict[id][0],self.pkt_loss_dict[id][1],label=id)
-                self.packet_loss_plot.legend( loc='upper left', numpoints = 1 )
-                self.packet_loss_graph.canvas.draw()
-            #Need both of these to rescale
-            self.packet_loss_plot.relim()
-            self.packet_loss_plot.autoscale_view()
                      
             
         elif args[1]=="buf_level":
@@ -146,32 +138,17 @@ class Graphics(object):
                 self.buf_level_dict[id]=(currTime, currValue)                
             else:
                 self.buf_level_dict[id]=([float(time)],[value])
-            self.buffer_occupancy_plot.clear()
-            for id in self.buf_level_dict.keys():
-                self.buffer_occupancy_plot.plot(self.buf_level_dict[id][0],self.buf_level_dict[id][1],label=id)   
-                self.buffer_occupancy_plot.legend( loc='upper left', numpoints = 1 )
-                self.buffer_occupancy_graph.canvas.draw()
-            #Need both of these to rescale
-            self.buffer_occupancy_plot.relim()
-            self.buffer_occupancy_plot.autoscale_view()
                 
                 
         elif args[1]=="link_flow_rate":
             if(id in self.link_flow_rate_dict.keys()):
-                currTime, currValue=link_flow_rate_dict[id]
+                currTime, currValue = self.link_flow_rate_dict[id]
                 currTime.append(float(time))
                 currValue.append(value)
                 self.link_flow_rate_dict[id]=(currTime, currValue)                
             else:
                 self.link_flow_rate_dict[id]=([float(time)],[value])
-            self.link_flow_rate_plot.clear()
-            for id in self.link_flow_rate_dict.keys():
-                self.link_flow_rate_plot.plot(self.link_flow_rate_dict[id][0],self.link_flow_rate_dict[id][1],label=id)    
-                self.link_flow_rate_plot.legend( loc='upper left', numpoints = 1 )
-                self.link_flow_rate_graph.canvas.draw()
-            #Need both of these to rescale
-            self.link_flow_rate_plot.relim()
-            self.link_flow_rate_plot.autoscale_view()
+
             
         elif args[1]=="packet_rtt":
             if(id in self.packet_RTT_dict.keys()):
@@ -181,14 +158,7 @@ class Graphics(object):
                 self.packet_RTT_dict[id]=(currTime, currValue)                
             else:
                 self.packet_RTT_dict[id]=([float(time)],[value])
-            self.packet_RTT_plot.clear()
-            for id in self.packet_RTT_dict.keys():
-                self.packet_RTT_plot.plot(self.packet_RTT_dict[id][0],self.packet_RTT_dict[id][1],label=id)  
-                self.packet_RTT_plot.legend( loc='upper left', numpoints = 1 )
-                self.packet_RTT_graph.canvas.draw()
-            #Need both of these to rescale
-            self.packet_RTT_plot.relim()
-            self.packet_RTT_plot.autoscale_view()
+
             
         elif args[1]=="flow_send_rate":
             if(id in self.flow_rate_dict.keys()):
@@ -198,14 +168,7 @@ class Graphics(object):
                 self.flow_rate_dict[id]=(currTime, currValue)                
             else:
                 self.flow_rate_dict[id]=([float(time)],[value])
-            self.flow_rate_plot.clear()
-            for id in self.flow_rate_dict.keys():
-                self.flow_rate_plot.plot(self.flow_rate_dict[id][0],self.flow_rate_dict[id][1],label=id)    
-                self.flow_rate_plot.legend( loc='upper left', numpoints = 1 )
-                self.flow_rate_graph.canvas.draw()
-            #Need both of these to rescale
-            self.flow_rate_plot.relim()
-            self.flow_rate_plot.autoscale_view()            
+         
             
         elif args[1]=="host_send_rate":
             if(id in self.host_send_rate_dict.keys()):
@@ -215,22 +178,73 @@ class Graphics(object):
                 self.host_send_rate_dict[id]=(currTime, currValue)                
             else:
                 self.host_send_rate_dict[id]=([float(time)],[value])
-                
-            self.host_send_rate_plot.clear()
-            for id in self.host_send_rate_dict.keys():
-                self.host_send_rate_plot.plot(self.host_send_rate_dict[id][0],self.host_send_rate_dict[id][1],label=id)   
-                self.host_send_rate_plot.legend( loc='upper left', numpoints = 1 )
-                self.host_send_rate_graph.canvas.draw()
-            #Need both of these to rescale
-            self.host_send_rate_plot.relim()
-            self.host_send_rate_plot.autoscale_view()
             
+
+    def redraw(self):
+        self.packet_loss_plot.clear()
+        for id in self.pkt_loss_dict.keys():
+            self.packet_loss_plot.plot(self.pkt_loss_dict[id][0],self.pkt_loss_dict[id][1],label=id)
+            self.packet_loss_plot.legend( loc='upper left', numpoints = 1 )
+            self.packet_loss_graph.canvas.draw()
+        #Need both of these to rescale
+        self.packet_loss_plot.relim()
+        self.packet_loss_plot.autoscale_view()
+
+        self.buffer_occupancy_plot.clear()
+        for id in self.buf_level_dict.keys():
+            self.buffer_occupancy_plot.plot(self.buf_level_dict[id][0],self.buf_level_dict[id][1],label=id)   
+            self.buffer_occupancy_plot.legend( loc='upper left', numpoints = 1 )
+            self.buffer_occupancy_graph.canvas.draw()
+        #Need both of these to rescale
+        self.buffer_occupancy_plot.relim()
+        self.buffer_occupancy_plot.autoscale_view()
+
+        self.link_flow_rate_plot.clear()
+        for id in self.link_flow_rate_dict.keys():
+            self.link_flow_rate_plot.plot(self.link_flow_rate_dict[id][0],self.link_flow_rate_dict[id][1],label=id)    
+            self.link_flow_rate_plot.legend( loc='upper left', numpoints = 1 )
+            self.link_flow_rate_graph.canvas.draw()
+        #Need both of these to rescale
+        self.link_flow_rate_plot.relim()
+        self.link_flow_rate_plot.autoscale_view()
+
+        self.packet_RTT_plot.clear()
+        for id in self.packet_RTT_dict.keys():
+            self.packet_RTT_plot.plot(self.packet_RTT_dict[id][0],self.packet_RTT_dict[id][1],label=id)  
+            self.packet_RTT_plot.legend( loc='upper left', numpoints = 1 )
+            self.packet_RTT_graph.canvas.draw()
+        #Need both of these to rescale
+        self.packet_RTT_plot.relim()
+        self.packet_RTT_plot.autoscale_view()
+
+        self.flow_rate_plot.clear()
+        for id in self.flow_rate_dict.keys():
+            self.flow_rate_plot.plot(self.flow_rate_dict[id][0],self.flow_rate_dict[id][1],label=id)    
+            self.flow_rate_plot.legend( loc='upper left', numpoints = 1 )
+            self.flow_rate_graph.canvas.draw()
+        #Need both of these to rescale
+        self.flow_rate_plot.relim()
+        self.flow_rate_plot.autoscale_view()   
+
+        self.host_send_rate_plot.clear()
+        for id in self.host_send_rate_dict.keys():
+            self.host_send_rate_plot.plot(self.host_send_rate_dict[id][0],self.host_send_rate_dict[id][1],label=id)   
+            self.host_send_rate_plot.legend( loc='upper left', numpoints = 1 )
+            self.host_send_rate_graph.canvas.draw()
+        #Need both of these to rescale
+        self.host_send_rate_plot.relim()
+        self.host_send_rate_plot.autoscale_view()
+
 if __name__ == '__main__':
     graphs= Graphics() 
     while True:
-        msg = raw_input()
-        if not msg:
+        try:
+            msg = raw_input()
+            if not msg:
+                break
+        except:
             break
         graphs.update(msg)
+    graphs.redraw()
     graphs.root.mainloop()  
     
