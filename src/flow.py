@@ -97,7 +97,7 @@ class BaseFlow(object):
         self._last_ss = 0.0
 
         # Dup ack counter
-        self._last_pkinfo = None
+        self.last_pkinfo = None
         self._ndup = 0
 
         # State
@@ -215,11 +215,11 @@ class BaseFlow(object):
         expected = self.window.offset
 
         if packet_no < expected:
-            if packet_no == self._last_pkinfo.packet_no:
+            if packet_no == self.last_pkinfo.packet_no:
                 # Dup ack
                 self._ndup += 1
                 print('{:06f} dupack {}'.format(self.env.now, ack_no))
-                self._state.event_dupack(self._last_pkinfo, self._ndup)
+                self._state.event_dupack(self.last_pkinfo, self._ndup)
             return
         else:
             # Normal ack
@@ -228,7 +228,7 @@ class BaseFlow(object):
 
             # Locate the packet tracker
             pktt = q[packet_no]
-            self._last_pkinfo = pktt
+            self.last_pkinfo = pktt
             assert pktt.packet_no == packet_no
 
             # Mark the packet as acked
@@ -313,19 +313,12 @@ class FlowState(object):
 
 class TCPTahoeSS(FlowState):
 
-    def _retransmit(self, packet_no):
-        self.context.ssthresh = max(1, self.context.cwnd / 2)
-        self.context.cwnd = 1
-        self.context.retransmit(packet_no)
-
-        self.context.state = 'ret'
-
     def event_timeout(self, packet_info):
-        self._retransmit(packet_info.packet_no)
+        self.context.state = 'ret'
 
     def event_dupack(self, packet_info, ndup):
         if ndup == 3:
-            self._retransmit(packet_info.packet_no + 1)
+            self.context.state = 'ret'
 
     def event_ack(self, packet_info):
         self.context.cwnd += 1
@@ -338,20 +331,20 @@ class TCPTahoeRet(FlowState):
 
     def __init__(self, context, name):
         super(TCPTahoeRet, self).__init__(context, name)
-        self.start_time = self.context.env.now
+        self.packet_no = self.context.last_pkinfo.packet_no + 1
+        self.context.ssthresh = max(1, self.context.cwnd / 2)
+        self.context.cwnd = 1
+        self.context.retransmit(self.packet_no)
 
     def event_timeout(self, packet_info):
         self.context.retransmit(packet_info.packet_no)
-        self.start_time = self.context.env.now
 
     def event_dupack(self, packet_info, ndup):
-        if ndup == 3:
-            self.context.retransmit(packet_info.packet_no + 1)
-            self.start_time = self.context.env.now
+        pass
 
     def event_ack(self, packet_info):
-        if packet_info.timestamp > self.start_time:
-            self.context.state = 'ss'
+        self.context.cwnd += 1
+        self.context.state = 'ss'
 
 class TCPTahoeCA(TCPTahoeSS):
 
@@ -374,16 +367,10 @@ class TCPTahoeFlow(BaseFlow):
 class TCPRenoSS(FlowState):
 
     def event_timeout(self, packet_info):
-        self.context.ssthresh = max(1, self.context.cwnd / 2)
-        self.context.cwnd = 1
-        self.context.retransmit(packet_info.packet_no)
         self.context.state = 'ret'
 
     def event_dupack(self, packet_info, ndup):
         if ndup >= 3:
-            self.context.ssthresh = max(1, self.context.cwnd / 2)
-            self.context.cwnd = self.context.ssthresh + ndup
-            self.context.retransmit(packet_info.packet_no + 1)
             self.context.state = 'frfr'
 
     def event_ack(self, packet_info):
@@ -403,21 +390,40 @@ TCPRenoRet = TCPTahoeRet
 class TCPRenoFRFR(FlowState):
 
     def __init__(self, context, name):
-        super(TCPTahoeRet, self).__init__(context, name)
+        super(TCPRenoFRFR, self).__init__(context, name)
         self.start_time = self.context.env.now
+        self.packet_no = self.context.last_pkinfo.packet_no + 1
+
+        self.context.ssthresh = max(1, self.context.cwnd / 2)
+        self.context.cwnd = self.context.ssthresh + 3
+        self.context.retransmit(self.packet_no)
 
     def event_timeout(self, packet_info):
-        self.context.retransmit(packet_info.packet_no)
-        self.start_time = self.context.env.now
+        if packet_info.timestamp >= self.start_time:
+            self.context.state = 'ret'
+        else:
+            self.context.retransmit(packet_info.packet_no)
 
     def event_dupack(self, packet_info, ndup):
-        if ndup >= 3:
-            self.context.retransmit(packet_info.packet_no + 1)
-            self.start_time = self.context.env.now
+        self.context.cwnd += 1
 
     def event_ack(self, packet_info):
-        if packet_info.timestamp > self.start_time:
-            self.context.state = 'ca'
+        self.context.cwnd = self.context.ssthresh
+        self.context.state = 'ca'
+
+class TCPRenoFlow(BaseFlow):
+
+    def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
+
+        states = {
+            'ss':   TCPRenoSS,
+            'ca':   TCPRenoCA,
+            'ret':  TCPRenoRet,
+            'frfr': TCPRenoFRFR }
+
+        super(TCPRenoFlow, self).__init__(
+            env, flow_id, src_id, dest_id, data_mb, start_s,
+            states, 'ss')
 
 class GoBackNAcker(object):
     """Used by the client-side of flow to find the ack number.
