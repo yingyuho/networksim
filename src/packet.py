@@ -66,53 +66,83 @@ class AckPacket(Packet):
         host.get_ack(self.flow_id, self.packet_no)
 
 class RoutingPacket(Packet):
-    """docstring for RoutingPacket"""
+    """
+    The RoutingPacket is passed around the system to find
+    the fastest path to hosts.
+    """
 
     _size = 64
 
-
-
-
     def __init__(self, router_start_id, recorded_time):
         """
-        The routing packets start at the router
-        The router_start_id is the ID of the router.
-        The recorded_time is initially the time that the routing packet is sent.
-        The host_id is the id of the host.
+        Initiates RoutingPacket
+
+        Args/private variables:
+            router_start_id: initiating router ID 
+            recorded_time: initially the current time
+            end_id: the host or router ID
+            passedTable: the dictionary containing routing table
+            passedTimeTable: the dictionary containing the fastest times
         """
         super(RoutingPacket, self).__init__()
         self.router_start_id = router_start_id
         self.recorded_time = recorded_time
-        self.host_id = None
+        self.end_id = None
+        self.passedTable = None
+        self.passedTimeTable = None
     
     def reach_router(self, router, port_id):
         """
-        When the packet reaches a router, it checks to see 
-        if the packet initialized there.
-        If it started at that router, then it checks to see if
-        the host_id is already in the table or if the time 
-        is faster than the initial arrival. If either case is true,
-        then we add the entry port as the destination for the packets.
-        We also keep track of the smallest time that it has arrived at so far.
-        If it's not the router that it started in, it sends to every port except
-        the entry port. 
+        Called when the packet arrives at a router
+
+        Args:
+            router: the router that the packet arrived at
+            port_id: the port it arrived through
+        Purpose:
+            Dijkstra. If the packet arrives to a router that
+            it didn't start in, then the packet copies the 
+            timeTable and the routing table of the router.
+            It then goes through the port it arrived from.
+
+            If the routing packet started at that router, 
+            then we check to see if there was a dictionary passed.
+            If there was we go through the ditionary and find the shortest
+            path to all hosts in that dictionary. If not, 
+            then we check to see if the end_id(host id) is in the
+            dictionary. If it is, we check to see if the time is faster.
+            if it is, we replace the time and the port_id.
         """
         if self.router_start_id == router.dev_id:
-            if self.host_id not in router.table \
-               or router.timeTable[self.host_id] > self.recorded_time:
-                router.table[self.host_id] = port_id
-                router.timeTable[self.host_id] = self.recorded_time
+            if self.passedTable == None:
+                if self.end_id not in router.table \
+                   or router.timeTable[self.end_id] >= self.recorded_time:
+                    router.table[self.end_id] = port_id
+                    router.timeTable[self.end_id] = self.recorded_time
+            else:
+                for host in self.passedTable:
+                    if host not in router.table or router.timeTable[host] >= self.passedTimeTable[host] + self.recorded_time:
+                        router.table[host] = port_id
+                        router.timeTable[host] = self.passedTimeTable[host] + self.recorded_time
         else:
-            router.send_except(self, except_id=port_id)
+            self.passedTable = copy.copy(router.table)
+            self.passedTimeTable = copy.copy(router.timeTable)
+            self.recorded_time = router.env.now - self.recorded_time
+            router.send(self, port_id)
     
     def reach_host(self, host):
         """
-        If it arrives at a host, then it finds the time it took to get to the host.
-        It also stores the host_id. If the host_id is not None,
-        then it doesn't do anything.
+        Called when the packet reaches a host
+
+        Args:
+            host: The host that the packet arrived at.
+
+        Purpose:
+            If the end_id is not initialized, then the packet records
+            how long it took for the packet to get to the host. 
+            it then sends the packet to the router it came from. 
         """
-        if self.host_id == None:
+        if self.end_id == None:
             self.recorded_time = host.env.now - self.recorded_time
-            self.host_id = host.dev_id;
+            self.end_id = host.dev_id;
             print(host.dev_id)
             host.send(self, self.router_start_id)
