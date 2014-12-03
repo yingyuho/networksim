@@ -32,7 +32,7 @@ class DataPacket(Packet):
 
     payload_size = 1024
 
-    def __init__(self, src, dest, flow_id, packet_no):
+    def __init__(self, src, dest, flow_id, packet_no, timestamp):
         """
         Initiates the DataPacket
 
@@ -41,12 +41,14 @@ class DataPacket(Packet):
             dest: which host_id the packet should end in.
             flow_id: the ID of the flow that the packet is from.
             packet_no: the packet number.
+            timestamp: time when the packet was sent
         """
         super(DataPacket, self).__init__()
         self.src = src
         self.dest = dest
         self.flow_id = flow_id
         self.packet_no = packet_no
+        self.timestamp = timestamp
 
     def reach_router(self, router, port_id):
         """
@@ -76,7 +78,8 @@ class DataPacket(Packet):
         #     host.env.now, self.src, self.dest, self.packet_no))
         n = host.get_data(self.flow_id, self.packet_no)
         if n is not None:
-            host.send_except(AckPacket(self.dest, self.src, self.flow_id, n))
+            host.send_except(AckPacket(
+                self.dest, self.src, self.flow_id, n, self.timestamp))
 
 class AckPacket(Packet):
     """
@@ -85,7 +88,7 @@ class AckPacket(Packet):
 
     _size = 64
 
-    def __init__(self, src, dest, flow_id, packet_no):
+    def __init__(self, src, dest, flow_id, packet_no, timestamp):
         """
         Initiates the AckPacket
 
@@ -94,12 +97,14 @@ class AckPacket(Packet):
             dest: the destination of the packet
             flow_id: the id of the flow
             packet_no: the packet number
+            timestamp: time when the original data packet was sent
         """
         super(AckPacket, self).__init__()
         self.src = src
         self.dest = dest
         self.flow_id = flow_id
         self.packet_no = packet_no
+        self.timestamp = timestamp
 
     def reach_router(self, router, port_id):
         """
@@ -116,7 +121,7 @@ class AckPacket(Packet):
         router.send(self, router.table[self.dest])
 
     def reach_host(self, host):
-        host.get_ack(self.flow_id, self.packet_no)
+        host.get_ack(self.flow_id, self.packet_no, self.timestamp)
 
 class RoutingPacket(Packet):
     """

@@ -5,7 +5,7 @@ import os
 from simpy_ext import SizedStore
 from device import Host, Link, Router, PipePair
 from packet import DataPacket
-from flow import Flow, TCPTahoeFlow, FASTTCP
+from flow import TCPTahoeFlow, FASTTCP
 
 class Network(object):
 

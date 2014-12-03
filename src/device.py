@@ -141,11 +141,11 @@ class Host(Device):
                 self.env.now, flow_id, self.dev_id, packet_no))
         return n
 
-    def get_ack(self, flow_id, packet_no):
+    def get_ack(self, flow_id, packet_no, timestamp):
         """Gets acknowledgement """
         print('{:.6f} receive_ack {} {} {}'.format(
             self.env.now, flow_id, self.dev_id, packet_no))
-        self._flows[flow_id].get_ack(packet_no)
+        self._flows[flow_id].get_ack(packet_no, timestamp)
 
 class BufferedCable(object):
     """The general object for a one-way connector between objects. Includes 
