@@ -24,13 +24,24 @@ class Packet(object):
         raise NotImplementedError()
 
 class DataPacket(Packet):
-    """docstring for DataPacket"""
+    """
+    The DataPacket is sent from one host to another.
+    """
 
     _size = 1536
 
     payload_size = 1024
 
     def __init__(self, src, dest, flow_id, packet_no):
+        """
+        Initiates the DataPacket
+
+        Args:
+            src: which host_id the packet starts in.
+            dest: which host_id the packet should end in.
+            flow_id: the ID of the flow that the packet is from.
+            packet_no: the packet number.
+        """
         super(DataPacket, self).__init__()
         self.src = src
         self.dest = dest
@@ -38,9 +49,29 @@ class DataPacket(Packet):
         self.packet_no = packet_no
 
     def reach_router(self, router, port_id):
+        """
+        When it reaches a router, it goes through the port
+        that has the shortest time.
+
+        Args: 
+            router: the router that the packet arrived to.
+            port_id: the port it came in from.
+
+        Purpose:
+            The packet is sent to through the port into the router.
+        """
         router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
+        """
+        when the packet arrives at the host.
+
+        Args:
+            host: The host that the packet arrived at.
+
+        Purpose:
+            Sends an acknowledge packet back when the host receives the packet
+        """
         # print('{:.6f} : {} -> {} : Dta {}'.format(
         #     host.env.now, self.src, self.dest, self.packet_no))
         n = host.get_data(self.flow_id, self.packet_no)
@@ -48,11 +79,22 @@ class DataPacket(Packet):
             host.send_except(AckPacket(self.dest, self.src, self.flow_id, n))
 
 class AckPacket(Packet):
-    """docstring for AckPacket"""
+    """
+    This packet allows hsots to know their packet was recieved
+    """
 
     _size = 64
 
     def __init__(self, src, dest, flow_id, packet_no):
+        """
+        Initiates the AckPacket
+
+        Args:
+            src: the source of the packet
+            dest: the destination of the packet
+            flow_id: the id of the flow
+            packet_no: the packet number
+        """
         super(AckPacket, self).__init__()
         self.src = src
         self.dest = dest
@@ -60,6 +102,17 @@ class AckPacket(Packet):
         self.packet_no = packet_no
 
     def reach_router(self, router, port_id):
+        """
+        The packet arrived at the router
+
+        Args:
+            router: the router that the packet arrived at.
+            port_id: the port that the packet arrived from
+
+        Purpose: 
+            The packet is sent throught the port specified 
+            by the routing table.
+        """
         router.send(self, router.table[self.dest])
 
     def reach_host(self, host):
