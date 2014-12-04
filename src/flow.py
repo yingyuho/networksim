@@ -341,7 +341,10 @@ class TCPTahoeRet(FlowState):
 
     def __init__(self, context, name):
         super(TCPTahoeRet, self).__init__(context, name)
-        self.packet_no = self.context.last_pkinfo.packet_no + 1
+        if self.context.last_pkinfo is None:
+            self.packet_no = 1
+        else:
+            self.packet_no = self.context.last_pkinfo.packet_no + 1
         self.context.ssthresh = max(1, self.context.cwnd / 2)
         self.context.cwnd = 1
         self.context.retransmit(self.packet_no)
