@@ -4,6 +4,7 @@ from operator import attrgetter
 
 import simpy
 import random
+import copy
 
 class Packet(object):
     """docstring for Packet"""
@@ -63,7 +64,10 @@ class DataPacket(Packet):
         Purpose:
             The packet is sent to through the port into the router.
         """
-        router.send(self, router.table[self.dest])
+        if self.dest not in router.table:
+            router.send_except(self, port_id)
+        else:
+            router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
         """
@@ -119,9 +123,8 @@ class AckPacket(Packet):
             The packet is sent throught the port specified 
             by the routing table.
         """
-        print("routing packet " + str(self.packet_no) + str(router.table[self.dest]))
         if self.dest not in router.table:
-            router.send(self, random.choice(router.table.values()))
+            router.send_except(self, port_id)
         else:
             router.send(self, router.table[self.dest])
 
@@ -136,23 +139,24 @@ class RoutingPacket(Packet):
 
     _size = 64
 
-    def __init__(self, router_start_id, recorded_time):
+    def __init__(self, start_id, recorded_time, static = False):
         """
         Initiates RoutingPacket
 
         Args/private variables:
-            router_start_id: initiating router ID 
+            start_id: initiating router ID 
             recorded_time: initially the current time
             end_id: the host or router ID
             passedTable: the dictionary containing routing table
             passedTimeTable: the dictionary containing the fastest times
         """
         super(RoutingPacket, self).__init__()
-        self.router_start_id = router_start_id
+        self.start_id = start_id
         self.recorded_time = recorded_time
         self.end_id = None
         self.passedTable = None
         self.passedTimeTable = None
+        self.stat = static
     
     def reach_router(self, router, port_id):
         """
@@ -175,22 +179,30 @@ class RoutingPacket(Packet):
             dictionary. If it is, we check to see if the time is faster.
             if it is, we replace the time and the port_id.
         """
-        if self.router_start_id == router.dev_id:
-            if self.passedTable == None:
-                if self.end_id not in router.table \
-                   or router.timeTable[self.end_id] >= self.recorded_time:
-                    router.table[self.end_id] = port_id
-                    router.timeTable[self.end_id] = self.recorded_time
-            else:
-                for host in self.passedTable:
-                    if host not in router.table or router.timeTable[host] >= self.passedTimeTable[host] + self.recorded_time:
-                        router.table[host] = port_id
-                        router.timeTable[host] = self.passedTimeTable[host] + self.recorded_time
+        if self.stat:
+            if self.start_id not in router.table:
+                router.table[self.start_id] = port_id
+            router.send_except(self, port_id)
         else:
-            self.passedTable = copy.copy(router.table)
-            self.passedTimeTable = copy.copy(router.timeTable)
-            self.recorded_time = router.env.now - self.recorded_time
-            router.send(self, port_id)
+            if self.start_id == router.dev_id:
+                if self.passedTable is None:
+                    if self.end_id not in router.table \
+                       or router.timeTable[self.end_id] >= self.recorded_time:
+                        router.table[self.end_id] = port_id
+                        router.timeTable[self.end_id] = self.recorded_time
+                else:
+                    for host in self.passedTable:
+                        if host not in router.timeTable or (host in self.passedTimeTable and router.timeTable[host] >= self.passedTimeTable[host] + self.recorded_time):
+                            router.table[host] = port_id
+                            if host in self.passedTimeTable:
+                                router.timeTable[host] =  self.passedTimeTable[host]+ self.recorded_time
+                            else:
+                                router.timeTable[host] = self.recorded_time
+            else:
+                self.passedTable = copy.copy(router.table)
+                self.passedTimeTable = copy.copy(router.timeTable)
+                self.recorded_time = router.env.now - self.recorded_time
+                router.send(self, port_id)
     
     def reach_host(self, host):
         """
@@ -204,8 +216,9 @@ class RoutingPacket(Packet):
             how long it took for the packet to get to the host. 
             it then sends the packet to the router it came from. 
         """
-        if self.end_id == None:
+        if self.stat:
+            pass
+        elif self.end_id == None:
             self.recorded_time = host.env.now - self.recorded_time
             self.end_id = host.dev_id;
-            print(host.dev_id)
-            host.send(self, self.router_start_id)
+            host.send_except(self)
