@@ -119,6 +119,7 @@ class AckPacket(Packet):
             The packet is sent throught the port specified 
             by the routing table.
         """
+        print("routing packet " + str(self.packet_no) + str(router.table[self.dest]))
         if self.dest not in router.table:
             router.send(self, random.choice(router.table.values()))
         else:
