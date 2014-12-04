@@ -109,7 +109,7 @@ class Host(Device):
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
-        self.env.process(self.proc_static_routing())
+        self.env.process(self.proc_routing())
 
     def receive(self, packet, from_id):
         """Receives packets """
@@ -148,9 +148,12 @@ class Host(Device):
             self.env.now, flow_id, self.dev_id, packet_no))
         self._flows[flow_id].get_ack(packet_no, timestamp)
 
-    def proc_static_routing(self):
-        self.send_except(SonarPacket(self.dev_id, 0))
-        yield self.env.event().succeed()
+    def proc_routing(self):
+        ver = 0
+        while True:
+            self.send_except(SonarPacket(self.dev_id, ver))
+            yield self.env.timeout(5)
+            ver += 1
 
 class BufferedCable(object):
     """The general object for a one-way connector between objects. Includes 
