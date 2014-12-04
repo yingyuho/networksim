@@ -202,5 +202,4 @@ class RoutingPacket(Packet):
         if self.end_id == None:
             self.recorded_time = host.env.now - self.recorded_time
             self.end_id = host.dev_id;
-            print(host.dev_id)
             host.send(self, self.router_start_id)
