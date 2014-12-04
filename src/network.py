@@ -67,8 +67,7 @@ class Network(object):
                 self._edges.append((fields[0], fields[2]))
             else:
                 fields[3:4] = map(float, fields[3:5])
-                f = CubicTCPFlow(
-                    self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
+                f = TCPRenoFlow(self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
         stream.close()
 
@@ -91,5 +90,5 @@ class Network(object):
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, 'tc0.txt')
-    tc0.run(1.0 + 50)
+    tc0 = Network(None, 'tc1.txt')
+    tc0.run(0.5 + 50)
