@@ -5,7 +5,7 @@ import os
 from simpy_ext import SizedStore
 from device import Host, Link, Router, PipePair
 from packet import DataPacket
-from flow import TCPTahoeFlow, TCPRenoFlow, FastTCPFlow
+from flow import TCPTahoeFlow, TCPRenoFlow, FastTCPFlow, CubicTCPFlow
 
 class Network(object):
 
@@ -92,4 +92,4 @@ class Network(object):
 
 if __name__ == '__main__':
     tc0 = Network(None, 'tc1.txt')
-    tc0.run(1.0 + 50)
+    tc0.run(0.5 + 50)

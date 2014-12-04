@@ -7,7 +7,7 @@ import simpy
 
 from simpy_ext import SizedStore
 from flow import GoBackNAcker
-from packet import RoutingPacket
+from packet import RoutingPacket, SonarPacket
 
 class PipePair(object):
     """A named two-tuple of :class:`~simpy.core.Environment` objects for
@@ -118,7 +118,6 @@ class Host(Device):
         self._acker = defaultdict(GoBackNAcker)
         self.env.process(self.init_static_routing())
 
-
     def receive(self, packet, from_id):
         """Receives packets """
         packet.reach_host(self)
@@ -155,6 +154,13 @@ class Host(Device):
         print('{:.6f} receive_ack {} {} {}'.format(
             self.env.now, flow_id, self.dev_id, packet_no))
         self._flows[flow_id].get_ack(packet_no, timestamp)
+
+    def proc_routing(self):
+        ver = 0
+        while True:
+            self.send_except(SonarPacket(self.dev_id, ver))
+            yield self.env.timeout(5)
+            ver += 1
 
 class BufferedCable(object):
     """The general object for a one-way connector between objects. Includes 
@@ -286,6 +292,18 @@ class Router(Device):
         self.table = {}
         self.timeTable = {}
         self.env.process(self.init_routing())
+
+        self.table_version = {}
+        self.table_reverse = {}
+        self.table_forward = {}
+
+    def look_up(self, dest):
+        if dest in self.table_forward:
+            return self.table_forward[dest]
+        # elif dest in self.table_reverse:
+        #     return self.table_reverse[dest]
+        else:
+            return None
 
     def receive(self, packet, from_id):
         """Recieves a packet from a port if the packet is a routing packet.

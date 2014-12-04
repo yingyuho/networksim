@@ -131,6 +131,52 @@ class AckPacket(Packet):
     def reach_host(self, host):
         host.get_ack(self.flow_id, self.packet_no, self.timestamp)
 
+class SonarPacket(Packet):
+
+    _size = 64
+
+    def __init__(self, src, version):
+
+        super(SonarPacket, self).__init__()
+
+        self.src = src
+        self.version = version
+
+    def reach_router(self, router, port_id):
+        src = self.src
+        vtable = router.table_version
+        version = self.version
+        if src not in vtable or vtable[src] < version:
+            vtable[src] = version
+            router.table_reverse[src] = port_id
+            router.send_except(self, port_id)
+
+    def reach_host(self, host):
+        host.send_except(EchoPacket(self.src, host.dev_id, self.version))
+
+class EchoPacket(Packet):
+
+    _size = 64
+
+    def __init__(self, src, dest, version):
+
+        super(EchoPacket, self).__init__()
+        self.src = src
+        self.dest = dest
+        self.version = version
+
+    def reach_router(self, router, port_id):
+        src = self.src
+        dest = self.dest
+        vtable = router.table_version
+        version = self.version
+        if src in vtable and vtable[src] == version:
+            router.table_forward[dest] = port_id
+            router.send(self, router.table_reverse[src])
+
+    def reach_host(self, host):
+        pass
+
 class RoutingPacket(Packet):
     """
     The RoutingPacket is passed around the system to find
