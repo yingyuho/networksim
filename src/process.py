@@ -13,7 +13,7 @@ def time_binner(freq):
         return int(freq * float(args[0]))
     return keyfunc
 
-def main(freq=50):
+def main(freq=10):
     stream = read_input(stdin)
     keyfunc = time_binner(freq)
 

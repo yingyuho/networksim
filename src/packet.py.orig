@@ -64,10 +64,14 @@ class DataPacket(Packet):
         Purpose:
             The packet is sent to through the port into the router.
         """
+<<<<<<< HEAD
         if self.dest not in router.table:
             router.send_except(self, port_id)
         else:
             router.send(self, router.table[self.dest])
+=======
+        router.send(self, router.look_up(self.dest))
+>>>>>>> 8d1cf0f5c2bf3a1dbcc8298c1d563a99c2d2aacf
         
     def reach_host(self, host):
         """
@@ -123,10 +127,19 @@ class AckPacket(Packet):
             The packet is sent throught the port specified 
             by the routing table.
         """
+<<<<<<< HEAD
         if self.dest not in router.table:
             router.send_except(self, port_id)
         else:
             router.send(self, router.table[self.dest])
+=======
+        router.send(self, router.look_up(self.dest))
+        # print("routing packet " + str(self.packet_no) + str(router.table[self.dest]))
+        # if self.dest not in router.table:
+        #     router.send(self, random.choice(router.table.values()))
+        # else:
+        #     router.send(self, router.table[self.dest])
+>>>>>>> 8d1cf0f5c2bf3a1dbcc8298c1d563a99c2d2aacf
 
     def reach_host(self, host):
         host.get_ack(self.flow_id, self.packet_no, self.timestamp)
@@ -228,7 +241,6 @@ class RoutingPacket(Packet):
         if self.stat:
             if self.start_id not in router.table:
                 router.table[self.start_id] = port_id
-                router.timeTable[self.start_id] = router.env.now - self.recorded_time
             router.send_except(self, port_id)
         else:
             if self.start_id == router.dev_id:
@@ -246,8 +258,8 @@ class RoutingPacket(Packet):
                             else:
                                 router.timeTable[host] = self.recorded_time
             else:
-                self.passedTable = copy.deepcopy(router.table)
-                self.passedTimeTable = copy.deepcopy(router.timeTable)
+                self.passedTable = copy.copy(router.table)
+                self.passedTimeTable = copy.copy(router.timeTable)
                 self.recorded_time = router.env.now - self.recorded_time
                 router.send(self, port_id)
     
@@ -268,4 +280,8 @@ class RoutingPacket(Packet):
         elif self.end_id == None:
             self.recorded_time = host.env.now - self.recorded_time
             self.end_id = host.dev_id;
+<<<<<<< HEAD
             host.send_except(self)
+=======
+            host.send(self, self.router_start_id)
+>>>>>>> 8d1cf0f5c2bf3a1dbcc8298c1d563a99c2d2aacf
