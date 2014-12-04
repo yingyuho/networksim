@@ -1,21 +1,12 @@
 from __future__ import division, print_function
 from functools import partial
-from collections import defaultdict
+from collections import defaultdict, deque
 from operator import attrgetter
 
 import simpy
 
-from simpy_ext import SizedStore
 from flow import GoBackNAcker
 from packet import RoutingPacket, SonarPacket
-
-class PipePair(object):
-    """A named two-tuple of :class:`~simpy.core.Environment` objects for
-    inter-device communication.
-    """
-    def __init__(self, pipe_in, pipe_out):
-        self.pipe_in = pipe_in
-        self.pipe_out = pipe_out
 
 class Device(object):
     """Superclass for Host, Router, and Link.
@@ -50,14 +41,6 @@ class Device(object):
         or None if there is no upper limit."""
         return self._max_degree
 
-    def _add_packet_listener(self, adj_id, port):
-        """Adds a listener to the port. Used in add_port."""
-        def listener():
-            while True:
-                packet = yield port.pipe_in.get()
-                self.receive(packet, adj_id)
-        self.env.process(listener())
-
     def add_port(self, adj_id, port):
         """Add and listen to an I/O port to this device."""
         if adj_id in self._ports:
@@ -68,12 +51,10 @@ class Device(object):
 
         self._ports[adj_id] = port
 
-        # Add a listener process
-        self._add_packet_listener(adj_id, port)
-
     def send(self, packet, to_id):
         """Sends packet from the current Device to the other Device."""
-        self._ports[to_id].pipe_out.put(packet)
+        # self._ports[to_id].pipe_out.put(packet)
+        self._ports[to_id].receive(packet, self.dev_id)
 
     def send_except(self, packet, except_id=None):
         for adj_id in self._ports:
@@ -169,61 +150,68 @@ class BufferedCable(object):
     Attributes:
         rate: Link rate in Mbps.
         delay: Link delay in milliseconds.
-        buf_size: Link buffer capacity in kilobytes.
+        buf_size: Link buffer capacity in bytes.
         io: 
 
     """
-    def __init__(self, env, link_id, src_id, rate, delay, buf_size):
-        self.env = env
+    def __init__(self, link, src_id):
 
-        self.link_id = link_id
+        self.link = link
+
+        self.env = link.env
+
+        self.link_id = link.dev_id
         self.src_id = src_id
 
-        self.rate = rate
-        self.delay = delay
-        self.buf_size = buf_size
+        self.rate = link.rate
+        self.delay = link.delay
+        self.buf_size = 1000 * link.buf_size
 
-        # Packet sizes are measured in bytes. Hence the factor 1024. 
-        self._packet_buffer = SizedStore(
-            self.env, 1024 * self.buf_size, attrgetter('size'))
+        self._packet_queue = deque()
 
-        self._cable = simpy.Store(env)
+        self._buffer_level = (
+            simpy.Container(self.env, capacity=self.buf_size),
+            simpy.Container(self.env, capacity=self.buf_size)
+        )
 
-        self.io = PipePair(simpy.Store(env), simpy.Store(env))
+        self._cable = simpy.Store(self.env)
 
-        self.env.process(self._feed_buffer())
         self.env.process(self._feed_cable())
 
-    def _feed_buffer(self):
-        while True:
-            packet = yield self.io.pipe_in.get()
-            # print('At Packet {0}'.format(packet.packet_no))
-            # print('Buffer level: {}'.format(self._packet_buffer._level))
+    def feed(self, packet):
+        self.env.process(self._feed_buffer(packet))
 
-            with self._packet_buffer.put(packet) as req:
-                ret = yield req | self.env.event().succeed()
-                if req in ret:
-                    print('{:06f} buffer_diff {} {}'.format(
-                        self.env.now, 
-                        self.link_id, 
-                        packet.size))
-                else:
-                    print('{:06f} packet_loss {} {} {}'.format(
-                        self.env.now, 
-                        self.link_id, 
-                        packet.flow_id, 
-                        packet.packet_no))
+    def _feed_buffer(self, packet):
+        with self._buffer_level[0].put(packet.size) as req:
+            ret = yield req | self.env.event().succeed()
+            if req in ret:
+                self._buffer_level[1].put(packet.size)
+                self._packet_queue.append(packet)
+                print('{:06f} buffer_diff {} {}'.format(
+                    self.env.now, 
+                    self.link_id, 
+                    packet.size))
+            else:
+                print('{:06f} packet_loss {} {} {}'.format(
+                    self.env.now, 
+                    self.link_id, 
+                    packet.flow_id, 
+                    packet.packet_no))
 
     def _feed_cable(self):
-        while True:            
-            packet = yield self._packet_buffer.get()
+        while True:
+            yield self._buffer_level[1].get(1)
+            packet = self._packet_queue.popleft()
+            yield self._buffer_level[1].get(packet.size - 1)
+
+            yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
+
+            yield self._buffer_level[0].get(packet.size)
 
             print('{:06f} buffer_diff {} {}'.format(
                 self.env.now, 
                 self.link_id, 
                 -1 * packet.size))
-
-            yield self.env.timeout(packet.size * 8 / (self.rate * 1.0E6))
 
             print('{:06f} transmission {} {}'.format(
                 self.env.now, 
@@ -234,7 +222,7 @@ class BufferedCable(object):
 
     def _latency(self, packet):
         yield self.env.timeout(self.delay / 1.0E3)
-        self.io.pipe_out.put(packet)
+        self.link.send_except(packet, self.src_id)
 
 class Link(Device):
     """Full-duplex link between hosts and routers.
@@ -262,21 +250,10 @@ class Link(Device):
         """Add and listen to an I/O port to this device."""
         super(Link, self).add_port(adj_id, port)
 
-        self._cables[adj_id] = BufferedCable(
-            self.env, self.dev_id, adj_id, 
-            self.rate, self.delay, self.buf_size)
-
-        def listener(adj_id):
-            while True:
-                packet = yield self._cables[adj_id].io.pipe_out.get()
-                for to_id in self._ports:
-                    if to_id != adj_id:
-                        self.send(packet, to_id)
-
-        self.env.process(listener(adj_id))
+        self._cables[adj_id] = BufferedCable(self, adj_id)
 
     def receive(self, packet, from_id):
-        self._cables[from_id].io.pipe_in.put(packet)
+        self._cables[from_id].feed(packet)
         
 class Router(Device):
     """Router creates the router objects in the network.

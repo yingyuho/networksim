@@ -3,7 +3,7 @@ from __future__ import division, print_function
 import simpy
 import os
 from simpy_ext import SizedStore
-from device import Host, Link, Router, PipePair
+from device import Host, Link, Router
 from packet import DataPacket
 from flow import TCPTahoeFlow, TCPRenoFlow, FastTCPFlow, CubicTCPFlow
 
@@ -67,7 +67,7 @@ class Network(object):
                 self._edges.append((fields[0], fields[2]))
             elif sect_idx == 3:
                 fields[3:4] = map(float, fields[3:5])
-                f = TCPRenoFlow(
+                f = FastTCPFlow(
                     self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
             elif sect_idx == 4:
@@ -77,12 +77,9 @@ class Network(object):
 
         # Establish communication between devices
         for e in self._edges:
-            pipe01 = simpy.Store(self.env)
-            pipe10 = simpy.Store(self.env)
-            port0 = PipePair(pipe10, pipe01)
-            port1 = PipePair(pipe01, pipe10)
-            self._nodes[e[0]].add_port(e[1], port0)
-            self._nodes[e[1]].add_port(e[0], port1)
+            n = (self._nodes[e[0]], self._nodes[e[1]])
+            n[0].add_port(e[1], n[1])
+            n[1].add_port(e[0], n[0])
 
         # Add Flows to Hosts
         for f in self.flows:
@@ -94,5 +91,5 @@ class Network(object):
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, 'tc2.txt')
-    tc0.run(60)
+    tc0 = Network(None, 'tc1.txt')
+    tc0.run(25)
