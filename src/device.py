@@ -94,7 +94,7 @@ class Device(object):
         while True:
             rp = RoutingPacket(self.dev_id, self.env.now)
             self.send_except(rp)
-            yield self.env.timeout(2)
+            yield self.env.timeout(5)
     def init_static_routing(self):
         """Send a routing packet to all the ports."""
         rp = RoutingPacket(self.dev_id, self.env.now, static = True)

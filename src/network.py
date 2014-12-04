@@ -91,5 +91,5 @@ class Network(object):
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, 'tc1.txt')
+    tc0 = Network(None, 'tc2.txt')
     tc0.run(0.5 + 50)
