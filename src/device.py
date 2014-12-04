@@ -90,7 +90,14 @@ class Device(object):
 
     def init_routing(self):
         """Send a routing packet to all the ports."""
-        rp = RoutingPacket(self.dev_id, self.env.now)
+        yield self.env.timeout(0.1)
+        while True:
+            rp = RoutingPacket(self.dev_id, self.env.now)
+            self.send_except(rp)
+            yield self.env.timeout(1)
+    def init_static_routing(self):
+        """Send a routing packet to all the ports."""
+        rp = RoutingPacket(self.dev_id, self.env.now, static = True)
         self.send_except(rp)
         yield self.env.event().succeed()
 
@@ -109,7 +116,7 @@ class Host(Device):
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
-        self.env.process(self.proc_routing())
+        self.env.process(self.init_static_routing())
 
     def receive(self, packet, from_id):
         """Receives packets """
@@ -284,7 +291,7 @@ class Router(Device):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
         self.timeTable = {}
-        # self.env.process(self.init_routing())
+        self.env.process(self.init_routing())
 
         self.table_version = {}
         self.table_reverse = {}

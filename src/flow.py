@@ -483,6 +483,66 @@ class FastTCPFlow(BaseFlow):
         # Calculated queue delay
         self.queue_delay = 0
 
+class CubicTCPCA(TCPRenoSS):
+
+    def event_ack(self, packet_info):
+
+        cont = self.context
+
+        # Current window size, before update
+        cur_cwnd = cont.cwnd
+
+        Wmax = cont.before_last_reduc
+        C = cont.C
+        beta = cont.beta
+
+        K = (Wmax * beta/C)**(1/3.0)
+
+        t = cont.env.now - cont.last_reduc_t
+
+        cont.cwnd = C * (t - K) ** 3 + Wmax
+
+        # Update is a reduction
+        if cont.cwnd < cur_cwnd:
+            cont.last_reduc_t = cont.env.now
+            if cont.before_last_reduc == cont.last_reduc:
+                cont.last_reduc = cont.cwnd
+            else:
+                cont.before_last_reduc = cont.last_reduc
+                cont.last_reduc = cont.cwnd
+
+
+
+class CubicTCPFlow(BaseFlow):
+    def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
+        states = {
+            'ss':   TCPRenoSS,
+            'ca':   CubicTCPCA,
+            'ret':  TCPTahoeRet,
+            'frfr': TCPRenoFRFR }
+
+        super(CubicTCPFlow, self).__init__(
+            env, flow_id, src_id, dest_id, data_mb, start_s,
+            states, 'ss')
+
+        ## Constants
+        # Scaling factor for window update
+        self.C = .4
+        # multiplication decrease factor applied for window reduction at the time of loss event
+        self.beta = .8
+
+        ## Variables
+        # Last window reduction time
+        self.last_reduc_t = 0
+
+        # Window size before last reduction
+        self.before_last_reduc = self.cwnd
+        self.last_reduc = self.cwnd
+
+
+
+
+
 class GoBackNAcker(object):
     """Used by the client-side of flow to find the ack number.
     """
