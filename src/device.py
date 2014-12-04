@@ -116,7 +116,7 @@ class Host(Device):
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
-        self.env.process(self.init_static_routing())
+        self.env.process(self.proc_routing())
 
     def receive(self, packet, from_id):
         """Receives packets """
@@ -291,7 +291,7 @@ class Router(Device):
         super(Router, self).__init__(env, dev_id)
         self.table = {}
         self.timeTable = {}
-        self.env.process(self.init_routing())
+        # self.env.process(self.init_routing())
 
         self.table_version = {}
         self.table_reverse = {}

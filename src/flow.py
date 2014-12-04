@@ -468,7 +468,7 @@ class FastTCPFlow(BaseFlow):
     def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
 
         states = {
-            'ss':   TCPRenoSS,
+            'ss':   FastTCPCA,
             'ca':   FastTCPCA,
             'ret':  TCPTahoeRet,
             'frfr': TCPRenoFRFR }

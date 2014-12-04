@@ -30,7 +30,7 @@ class DataPacket(Packet):
     The DataPacket is sent from one host to another.
     """
 
-    _size = 1536
+    _size = 1024
 
     payload_size = 1024
 
@@ -64,10 +64,11 @@ class DataPacket(Packet):
         Purpose:
             The packet is sent to through the port into the router.
         """
-        if self.dest not in router.table:
-            router.send_except(self, port_id)
-        else:
-            router.send(self, router.table[self.dest])
+        router.send(self, router.look_up(self.dest))
+        # if self.dest not in router.table:
+        #     router.send_except(self, port_id)
+        # else:
+        #     router.send(self, router.table[self.dest])
         
     def reach_host(self, host):
         """
@@ -123,10 +124,11 @@ class AckPacket(Packet):
             The packet is sent throught the port specified 
             by the routing table.
         """
-        if self.dest not in router.table:
-            router.send_except(self, port_id)
-        else:
-            router.send(self, router.table[self.dest])
+        router.send(self, router.look_up(self.dest))
+        # if self.dest not in router.table:
+        #     router.send_except(self, port_id)
+        # else:
+        #     router.send(self, router.table[self.dest])
 
     def reach_host(self, host):
         host.get_ack(self.flow_id, self.packet_no, self.timestamp)
