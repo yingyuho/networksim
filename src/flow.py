@@ -500,7 +500,7 @@ class CubicTCPCA(TCPRenoSS):
         cont.cwnd = C * (t - K) ** 3 + Wmax
 
         # Update is a reduction
-        if cont.cwnd < cont.last_reduc:
+        if cont.cwnd < cur_cwnd:
             cont.last_reduc_t = cont.env.now
             if cont.before_last_reduc == cont.last_reduc:
                 cont.last_reduc = cont.cwnd
