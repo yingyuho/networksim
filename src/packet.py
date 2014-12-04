@@ -3,6 +3,7 @@ from functools import partial
 from operator import attrgetter
 
 import simpy
+import random
 
 class Packet(object):
     """docstring for Packet"""
@@ -118,7 +119,11 @@ class AckPacket(Packet):
             The packet is sent throught the port specified 
             by the routing table.
         """
-        router.send(self, router.table[self.dest])
+        print("routing packet " + str(self.packet_no) + str(router.table[self.dest]))
+        if self.dest not in router.table:
+            router.send(self, random.choice(router.table.values()))
+        else:
+            router.send(self, router.table[self.dest])
 
     def reach_host(self, host):
         host.get_ack(self.flow_id, self.packet_no, self.timestamp)
@@ -202,5 +207,4 @@ class RoutingPacket(Packet):
         if self.end_id == None:
             self.recorded_time = host.env.now - self.recorded_time
             self.end_id = host.dev_id;
-            print(host.dev_id)
             host.send(self, self.router_start_id)
