@@ -94,7 +94,7 @@ class Device(object):
         while True:
             rp = RoutingPacket(self.dev_id, self.env.now)
             self.send_except(rp)
-            yield self.env.timeout(5)
+            yield self.env.timeout(1)
     def init_static_routing(self):
         """Send a routing packet to all the ports."""
         rp = RoutingPacket(self.dev_id, self.env.now, static = True)
@@ -116,7 +116,12 @@ class Host(Device):
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
+<<<<<<< HEAD
+        self.env.process(self.init_static_routing())
+
+=======
         self.env.process(self.proc_routing())
+>>>>>>> 8d1cf0f5c2bf3a1dbcc8298c1d563a99c2d2aacf
 
     def receive(self, packet, from_id):
         """Receives packets """
