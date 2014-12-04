@@ -98,5 +98,9 @@ def main(freq=50):
             print('{} buf_level {} {}'.format(t, link_id, 
                 amount / 1000 / buffer_level_count[link_id]))
 
+        for flow_id, amount in window_size_sum.iteritems():
+            print('{} window_size_rate {} {}'.format(t, flow_id,
+                amount / window_size_count[flow_id]))
+
 if __name__ == '__main__':
     main()
