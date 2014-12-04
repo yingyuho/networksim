@@ -67,7 +67,8 @@ class Network(object):
                 self._edges.append((fields[0], fields[2]))
             else:
                 fields[3:4] = map(float, fields[3:5])
-                f = CubicTCPFlow(self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
+                f = FastTCPFlow(
+                    self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
         stream.close()
 
