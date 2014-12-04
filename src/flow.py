@@ -341,7 +341,10 @@ class TCPTahoeRet(FlowState):
 
     def __init__(self, context, name):
         super(TCPTahoeRet, self).__init__(context, name)
-        self.packet_no = self.context.last_pkinfo.packet_no + 1
+        if self.context.last_pkinfo is None:
+            self.packet_no = 1
+        else:
+            self.packet_no = self.context.last_pkinfo.packet_no + 1
         self.context.ssthresh = max(1, self.context.cwnd / 2)
         self.context.cwnd = 1
         self.context.retransmit(self.packet_no)
@@ -500,7 +503,7 @@ class CubicTCPCA(TCPRenoSS):
         cont.cwnd = C * (t - K) ** 3 + Wmax
 
         # Update is a reduction
-        if cont.cwnd < cont.last_reduc:
+        if cont.cwnd < cur_cwnd:
             cont.last_reduc_t = cont.env.now
             if cont.before_last_reduc == cont.last_reduc:
                 cont.last_reduc = cont.cwnd
