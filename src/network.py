@@ -65,11 +65,14 @@ class Network(object):
                 self._nodes[fields[0]] = l
                 self._edges.append((fields[0], fields[1]))
                 self._edges.append((fields[0], fields[2]))
-            else:
+            elif sect_idx == 3:
                 fields[3:4] = map(float, fields[3:5])
-                f = FastTCPFlow(
+                f = TCPRenoFlow(
                     self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
+            elif sect_idx == 4:
+                print('# ' + line.strip())
+        print('#')
         stream.close()
 
         # Establish communication between devices
@@ -92,4 +95,4 @@ class Network(object):
 
 if __name__ == '__main__':
     tc0 = Network(None, 'tc2.txt')
-    tc0.run(0.5 + 50)
+    tc0.run(60)

@@ -5,3 +5,10 @@ H2
 L1 H1 H2 10 10 64
 -
 F1 H1 H2 20 1.0
+-
+link_flow_rate L1
+buf_level L1
+packet_loss_rate L1
+flow_send_rate F1
+window_size F1
+packet_rtt F1

@@ -23,3 +23,10 @@ L9 R4 T3 12.5 10 128
 F1 S1 T1 35 0.5
 F2 S2 T2 15 10
 F3 S3 T3 30 20
+-
+link_flow_rate L1 L2 L3
+buf_level L1 L2 L3
+packet_loss_rate L1 L2 L3
+flow_send_rate F1 F2 F3
+window_size F1 F2 F3
+packet_rtt F1 F2 F3

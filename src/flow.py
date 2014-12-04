@@ -121,8 +121,8 @@ class BaseFlow(object):
     @state.setter
     def state(self, value):
         self._state = self._state_constr[value](self, value)
-        print('{:.6f} state {} {}'.format(
-            self.env.now, self.id, value))
+        # print('{:.6f} state {} {}'.format(
+        #     self.env.now, self.id, value))
     
     @property
     def cwnd(self):
@@ -397,8 +397,6 @@ class TCPRenoCA(TCPRenoSS):
 
     def event_ack(self, packet_info):
         self.context.cwnd += 1 / self.context.cwnd
-
-TCPRenoRet = TCPTahoeRet
 
 class TCPRenoFRFR(FlowState):
 

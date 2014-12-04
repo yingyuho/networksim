@@ -4,6 +4,7 @@ from Tkinter import Tk, Label, BOTH
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
 import matplotlib
+import matplotlib.pyplot as plt
 matplotlib.use('TkAgg')
 
 
@@ -21,6 +22,7 @@ class Graphics(object):
         self.flow_rate_dict={}
         self.packet_RTT_dict={}
         self.host_send_rate_dict={}
+        self.window_size_dict = {}
         #set up the labels on the graphs
         label1 = Label(self.root, text="Packet Loss")
         label1.place(x=1184, y=0)
@@ -32,7 +34,8 @@ class Graphics(object):
         label4.place(x=1125, y=395)
         label5 = Label(self.root, text="Packet RTT")
         label5.place(x=1190, y=525)
-        label6 = Label(self.root, text="Host Send/Recieve Rate")
+        # label6 = Label(self.root, text="Host Send/Recieve Rate")
+        label6 = Label(self.root, text="Window Size")
         label6.place(x=1125, y=655)
 
     def initGraphs(self):
@@ -42,7 +45,8 @@ class Graphics(object):
         self.link_flow_rate_graph= Figure(tight_layout=True)
         self.flow_rate_graph= Figure(tight_layout=True)
         self.packet_RTT_graph= Figure(tight_layout=True)
-        self.host_send_rate_graph= Figure(tight_layout=True)
+        # self.host_send_rate_graph= Figure(tight_layout=True)
+        self.window_size_graph= Figure(tight_layout=True)
 
         #plots-plots are the objects that are actually updated
         self.packet_loss_plot = self.packet_loss_graph.add_subplot(111)
@@ -77,11 +81,17 @@ class Graphics(object):
         self.packet_RTT_plot.set_ylabel('Delay (seconds)')
         self.packet_RTT_plot.autoscale(enable=True)
 
-        self.host_send_rate_plot=self.host_send_rate_graph.add_subplot(111)
-        self.host_send_rate_plot.set_title('Host Send/Recieve Rate')
-        self.host_send_rate_plot.set_xlabel('Time (seconds)')
-        self.host_send_rate_plot.set_ylabel('Packets/Second')
-        self.host_send_rate_plot.autoscale(enable=True)
+        # self.host_send_rate_plot=self.host_send_rate_graph.add_subplot(111)
+        # self.host_send_rate_plot.set_title('Host Send/Recieve Rate')
+        # self.host_send_rate_plot.set_xlabel('Time (seconds)')
+        # self.host_send_rate_plot.set_ylabel('Packets/Second')
+        # self.host_send_rate_plot.autoscale(enable=True)
+
+        self.window_size_plot = self.window_size_graph.add_subplot(111)
+        self.window_size_plot.set_title('Window Size')
+        self.window_size_plot.set_xlabel('Time (seconds)')
+        self.window_size_plot.set_ylabel('Packets')
+        self.window_size_plot.autoscale(enable=True)
 
 
     def initUI(self):
@@ -108,7 +118,8 @@ class Graphics(object):
         canvas5.show()
         canvas5.get_tk_widget().place(x=30, y=520, height=140, width=1230)
 
-        canvas6 = FigureCanvasTkAgg(self.host_send_rate_graph, master=self.root)
+        # canvas6 = FigureCanvasTkAgg(self.host_send_rate_graph, master=self.root)
+        canvas6 = FigureCanvasTkAgg(self.window_size_graph, master=self.root)
         canvas6.show()
         canvas6.get_tk_widget().place(x=30, y=650, height=140, width=1230)
 
@@ -172,71 +183,94 @@ class Graphics(object):
                 self.flow_rate_dict[id]=([float(time)],[value])
 
 
-        elif args[1]=="host_send_rate":
-            if(id in self.host_send_rate_dict.keys()):
-                currTime, currValue=self.host_send_rate_dict[id]
+        # elif args[1]=="host_send_rate":
+        #     if(id in self.host_send_rate_dict.keys()):
+        #         currTime, currValue=self.host_send_rate_dict[id]
+        #         currTime.append(float(time))
+        #         currValue.append(value)
+        #         self.host_send_rate_dict[id]=(currTime, currValue)
+        #     else:
+        #         self.host_send_rate_dict[id]=([float(time)],[value])
+
+        elif args[1]=="window_size":
+            if(id in self.window_size_dict.keys()):
+                currTime, currValue=self.window_size_dict[id]
                 currTime.append(float(time))
                 currValue.append(value)
-                self.host_send_rate_dict[id]=(currTime, currValue)
+                self.window_size_dict[id]=(currTime, currValue)
             else:
-                self.host_send_rate_dict[id]=([float(time)],[value])
-
+                self.window_size_dict[id]=([float(time)],[value])
 
     def redraw(self):
         self.packet_loss_plot.clear()
         for id in self.pkt_loss_dict.keys():
             self.packet_loss_plot.plot(self.pkt_loss_dict[id][0],self.pkt_loss_dict[id][1],label=id)
             self.packet_loss_plot.legend(loc='lower right', numpoints = 1 )
-            self.packet_loss_graph.canvas.draw()
         #Need both of these to rescale
         self.packet_loss_plot.relim()
         self.packet_loss_plot.autoscale_view()
         self.packet_loss_graph.tight_layout()
+        self.packet_loss_plot.set_ylim(bottom=0)
+        self.packet_loss_graph.canvas.draw()
 
         self.buffer_occupancy_plot.clear()
         for id in self.buf_level_dict.keys():
             self.buffer_occupancy_plot.plot(self.buf_level_dict[id][0],self.buf_level_dict[id][1],label=id)
             self.buffer_occupancy_plot.legend(loc='lower right', numpoints = 1 )
-            self.buffer_occupancy_graph.canvas.draw()
         #Need both of these to rescale
         self.buffer_occupancy_plot.relim()
         self.buffer_occupancy_plot.autoscale_view()
+        self.buffer_occupancy_plot.set_ylim(bottom=0)
+        self.buffer_occupancy_graph.canvas.draw()
 
         self.link_flow_rate_plot.clear()
         for id in self.link_flow_rate_dict.keys():
             self.link_flow_rate_plot.plot(self.link_flow_rate_dict[id][0],self.link_flow_rate_dict[id][1],label=id)
             self.link_flow_rate_plot.legend(loc='lower right', numpoints = 1 )
-            self.link_flow_rate_graph.canvas.draw()
         #Need both of these to rescale
         self.link_flow_rate_plot.relim()
         self.link_flow_rate_plot.autoscale_view()
+        self.link_flow_rate_plot.set_ylim(bottom=0)
+        self.link_flow_rate_graph.canvas.draw()
 
         self.packet_RTT_plot.clear()
         for id in self.packet_RTT_dict.keys():
             self.packet_RTT_plot.plot(self.packet_RTT_dict[id][0],self.packet_RTT_dict[id][1],label=id)
             self.packet_RTT_plot.legend(loc='lower right', numpoints = 1 )
-            self.packet_RTT_graph.canvas.draw()
         #Need both of these to rescale
         self.packet_RTT_plot.relim()
         self.packet_RTT_plot.autoscale_view()
+        self.packet_RTT_plot.set_ylim(bottom=0)
+        self.packet_RTT_graph.canvas.draw()
 
         self.flow_rate_plot.clear()
         for id in self.flow_rate_dict.keys():
             self.flow_rate_plot.plot(self.flow_rate_dict[id][0],self.flow_rate_dict[id][1],label=id)
             self.flow_rate_plot.legend(loc='lower right', numpoints = 1 )
-            self.flow_rate_graph.canvas.draw()
         #Need both of these to rescale
         self.flow_rate_plot.relim()
         self.flow_rate_plot.autoscale_view()
+        self.flow_rate_plot.set_ylim(bottom=0)
+        self.flow_rate_graph.canvas.draw()
 
-        self.host_send_rate_plot.clear()
-        for id in self.host_send_rate_dict.keys():
-            self.host_send_rate_plot.plot(self.host_send_rate_dict[id][0],self.host_send_rate_dict[id][1],label=id)
-            self.host_send_rate_plot.legend(loc='lower right', numpoints = 1 )
-            self.host_send_rate_graph.canvas.draw()
+        # self.host_send_rate_plot.clear()
+        # for id in self.host_send_rate_dict.keys():
+        #     self.host_send_rate_plot.plot(self.host_send_rate_dict[id][0],self.host_send_rate_dict[id][1],label=id)
+        #     self.host_send_rate_plot.legend(loc='lower right', numpoints = 1 )
+        #     self.host_send_rate_graph.canvas.draw()
+        # #Need both of these to rescale
+        # self.host_send_rate_plot.relim()
+        # self.host_send_rate_plot.autoscale_view()
+
+        self.window_size_plot.clear()
+        for id in self.window_size_dict.keys():
+            self.window_size_plot.plot(self.window_size_dict[id][0],self.window_size_dict[id][1],label=id)
+            self.window_size_plot.legend(loc='lower right', numpoints = 1 )
         #Need both of these to rescale
-        self.host_send_rate_plot.relim()
-        self.host_send_rate_plot.autoscale_view()
+        self.window_size_plot.relim()
+        self.window_size_plot.autoscale_view()
+        self.window_size_plot.set_ylim(bottom=0)
+        self.window_size_graph.canvas.draw()
 
 if __name__ == '__main__':
     graphs= Graphics()

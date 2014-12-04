@@ -14,3 +14,10 @@ L4 R3 R4 10 10 64
 L5 R4 H2 12.5 10 64
 -
 F1 H1 H2 20 0.5
+-
+link_flow_rate L1 L2
+buf_level L1 L2
+packet_loss_rate L1 L2
+flow_send_rate F1
+window_size F1
+packet_rtt F1

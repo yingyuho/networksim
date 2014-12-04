@@ -140,7 +140,6 @@ class SonarPacket(Packet):
     def __init__(self, src, version):
 
         super(SonarPacket, self).__init__()
-
         self.src = src
         self.version = version
 
@@ -169,11 +168,9 @@ class EchoPacket(Packet):
 
     def reach_router(self, router, port_id):
         src = self.src
-        dest = self.dest
         vtable = router.table_version
-        version = self.version
-        if src in vtable and vtable[src] == version:
-            router.table_forward[dest] = port_id
+        if src in vtable and vtable[src] == self.version:
+            router.table_forward[self.dest] = port_id
             router.send(self, router.table_reverse[src])
 
     def reach_host(self, host):
