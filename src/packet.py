@@ -7,15 +7,21 @@ import random
 import copy
 
 class Packet(object):
-    """docstring for Packet"""
+    """
+    Packet super class
+    """
     def __init__(self):
+        """
+        Initiates the super Object for Packet
+        """
         super(Packet, self).__init__()
 
     _size = 0
 
     @property
     def size(self):
-        """Size of packet in bytes.
+        """
+        returns the size of packet in bytes.
         """
         return self._size
 
@@ -134,16 +140,35 @@ class AckPacket(Packet):
         host.get_ack(self.flow_id, self.packet_no, self.timestamp)
 
 class SonarPacket(Packet):
-
+    """
+    This SonarPacket is passed around the system
+    and keeps track of which port is the best for
+    a specific host
+    """
     _size = 64
 
     def __init__(self, src, version):
+        """
+        Initiates the SonarPacket
 
+        Attributes:
+        src: The source of the packet
+        version: the version of the packet
+        """
         super(SonarPacket, self).__init__()
         self.src = src
         self.version = version
 
     def reach_router(self, router, port_id):
+        """
+        Updates the routing table for the router
+        for that specific host if the version ID
+        is greater than the old one.
+
+        Args: 
+            router: the router it arrived at
+            port_id: The port the packet came in from
+        """
         src = self.src
         vtable = router.table_version
         version = self.version
@@ -153,20 +178,45 @@ class SonarPacket(Packet):
             router.send_except(self, port_id)
 
     def reach_host(self, host):
+        """
+        If it reaches a host, the packet sends an EchoPacket
+        back.
+
+        Args: 
+            host: The host that the packet arrived at.
+        """
         host.send_except(EchoPacket(self.src, host.dev_id, self.version))
 
 class EchoPacket(Packet):
-
+    """
+    The EchoPacket is sent when a sonar packet arrives to a host.
+    """
     _size = 64
 
     def __init__(self, src, dest, version):
+        """
+        Initiates an EchoPacket
 
+        Attributes:
+            src: Source of packet
+            dest: destination of packet
+            version: version ID
+        """
         super(EchoPacket, self).__init__()
         self.src = src
         self.dest = dest
         self.version = version
 
     def reach_router(self, router, port_id):
+        """
+        Updates the routing table for the router
+        for that specific host if the version ID
+        is the same as the old one.
+
+        Args: 
+            router: the router it arrived at
+            port_id: The port the packet came in from
+        """
         src = self.src
         vtable = router.table_version
         if src in vtable and vtable[src] == self.version:

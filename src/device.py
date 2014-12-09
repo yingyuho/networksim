@@ -19,30 +19,48 @@ class Device(object):
         _max_degree: The maximum number of Devices that can be attached."""
 
     def __init__(self, env, dev_id):
+        """
+        Initiates the Device Object
+
+        Args:
+            env: Simpy environment
+            dev_id: Device ID
+        """
         self.env = env
         self._dev_id = dev_id
         self._ports = {}
         
     @property
     def dev_id(self):
-        """Unique ID of this device in the network."""
+        """
+        Unique ID of this device in the network.
+        """
         return self._dev_id
 
     _max_degree = None
 
     @property
     def degree(self):
-        """Number of other devices this device connects to."""
+        """
+        Number of other devices this device connects to.
+        """
         return len(self._ports)
 
     @property
     def max_degree(self):
-        """Maximal number of other devices this device can connect to
-        or None if there is no upper limit."""
+        """
+        Maximal number of other devices this device can connect to
+        or None if there is no upper limit.
+        """
         return self._max_degree
 
     def add_port(self, adj_id, port):
-        """Add and listen to an I/O port to this device."""
+        """
+        Add and listen to an I/O port to this device.
+
+        Args:
+            adj_id: The adjacent port ID
+        """
         if adj_id in self._ports:
             raise Exception('Duplicate port name')
 
@@ -52,63 +70,106 @@ class Device(object):
         self._ports[adj_id] = port
 
     def send(self, packet, to_id):
-        """Sends packet from the current Device to the other Device."""
+        """
+        Sends packet from the current Device to the other Device.
+
+        Args:
+            Packet: The packet that arrived
+            to_id: the ID to be sent to
+        """
         # self._ports[to_id].pipe_out.put(packet)
         self._ports[to_id].receive(packet, self.dev_id)
 
     def send_except(self, packet, except_id=None):
+        """
+        Sends to all ports except a specified port
+
+        Args:
+            packet: The packet that we need to send
+            except_id: The id we don't want to send to.
+        """
         for adj_id in self._ports:
             if except_id is None or adj_id != except_id:
                 self.send(packet, adj_id)
 
     def receive(self, packet, from_id):
-        """Receives packet for the current Device."""
+        """
+        Receives packet for the current Device.
+
+        Args:
+            packet: the packet that we recieved
+            from_id: The ID it came from
+        """
         raise NotImplementedError()
 
     def activate_ports(self):
-        """Activates ports for the current Device."""
+        """
+        Activates ports for the current Device.
+
+        """
         raise NotImplementedError()
 
     def init_routing(self):
-        """Send a routing packet to all the ports."""
+        """
+        Send a routing packet to all the ports.
+        """
         yield self.env.timeout(0.1)
         while True:
             rp = RoutingPacket(self.dev_id, self.env.now)
             self.send_except(rp)
             yield self.env.timeout(5)
     def init_static_routing(self):
-        """Send a routing packet to all the ports."""
+        """
+        Send a routing packet to all the ports.
+        """
         rp = RoutingPacket(self.dev_id, self.env.now, static = True)
         self.send_except(rp)
         yield self.env.event().succeed()
 
 class Host(Device):
-    """The Host class represents the hosts in the network.
+    """
+    The Host class represents the hosts in the network.
 
     Attributes:
         flows: A list of the flows that send packets from this Host.
         _acker: 
-        """
+    """
 
     _max_degree = 1
 
     def __init__(self, env, dev_id):
-        """Constructor for Host object."""
+        """
+        Constructor for Host object.
+
+        Args:
+            env: Simpy environment
+            dev_id: device ID
+        """
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
         self._acker = defaultdict(GoBackNAcker)
         self.env.process(self.proc_routing())
 
     def receive(self, packet, from_id):
-        """Receives packets """
+        """
+        Receives packets
+
+        Args:
+            packet: Packet that it received
+            from_id: The port it arrived from
+        """
         packet.reach_host(self)
 
     def add_flow(self, flow):
-        """Add/initiate flow to Host."""
+        """
+        Add/initiate flow to Host.
+        """
         self._flows[flow.id] = flow
 
         def send_packet():
-            """Sends packets according to flow."""
+            """
+            Sends packets according to flow.
+            """
             while True:
                 packet = yield flow.next_packet.get()
                 for adj_id in self._ports:
@@ -121,7 +182,9 @@ class Host(Device):
         self.env.process(send_packet())
 
     def get_data(self, flow_id, packet_no):
-        """Gets acknowledgement data for packets."""
+        """
+        Gets acknowledgement data for packets.
+        """
         print('{:.6f} receive_data {} {} {}'.format(
             self.env.now, flow_id, self.dev_id, packet_no))
         n = self._acker[flow_id](packet_no)
@@ -131,7 +194,9 @@ class Host(Device):
         return n
 
     def get_ack(self, flow_id, packet_no, timestamp):
-        """Gets acknowledgement """
+        """
+        Gets acknowledgement 
+        """
         print('{:.6f} receive_ack {} {} {}'.format(
             self.env.now, flow_id, self.dev_id, packet_no))
         self._flows[flow_id].get_ack(packet_no, timestamp)
@@ -144,7 +209,8 @@ class Host(Device):
             ver += 1
 
 class BufferedCable(object):
-    """The general object for a one-way connector between objects. Includes 
+    """
+    The general object for a one-way connector between objects. Includes 
         buffers for packets.
 
     Attributes:
@@ -261,11 +327,23 @@ class Router(Device):
 
     Attributes:
         table: A dictionary mapping dest_id to link_id.
-        timeTable: 
+        timeTable: a dictionary that keeps track of the fastest
+            time to each host.
+        table_version: A dictionary that keeps track of the
+            current versions of sonar/echo packets
+        table_forward: A dictionary for directing packets forward
+        table_reverse: A dictionary for directing packets backwards
+            (Not used for directing data packets)
     """
 
     def __init__(self, env, dev_id):
-        """Constructor for a Router."""
+        """
+        Constructor for a Router.
+
+        Args:
+            env: Simpy environment
+            dev_id: Device ID
+        """
         super(Router, self).__init__(env, dev_id)
         self.table = {}
         self.timeTable = {}
@@ -276,6 +354,12 @@ class Router(Device):
         self.table_forward = {}
 
     def look_up(self, dest):
+        """
+        Looks up destination in table.
+
+        Args:
+            dest: host ID
+        """
         if dest in self.table_forward:
             return self.table_forward[dest]
         # elif dest in self.table_reverse:
@@ -284,7 +368,13 @@ class Router(Device):
             return None
 
     def receive(self, packet, from_id):
-        """Recieves a packet from a port if the packet is a routing packet.
-        then, send the packet to all the other ports.
+        """
+        Recieves a packet from a port if 
+        the packet is a routing packet.
+        Then, send the packet to all the other ports.
+
+        Args:
+            packet: Packet received
+            from_id: The port ID for which the packet arrived
         """
         packet.reach_router(self, from_id)
