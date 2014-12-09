@@ -8,6 +8,16 @@ import simpy
 from packet import DataPacket, AckPacket
 
 class PacketRecord(object):
+    """Tracking record for a sent data packet.
+
+    Attributes:
+        packet_no: Packet number starting from 1.
+        timestamp: Time when this packet was sent.
+        expiration: Deadline when a timeout event would be triggered.
+        acked: Whether this packet has been acknowledged.
+        retransmit: Whether this packet is a retransmitted one.
+    """
+
     def __init__(
         self, packet_no, timestamp, expiration, 
         acked=False, retransmit=False
@@ -18,9 +28,14 @@ class PacketRecord(object):
         self.acked = acked
         self.retransmit = retransmit
 
-_PktTrack = PacketRecord
-
 class SlidingWindow(object):
+    """A generic transmission window.
+
+    It is a list with possibly non-zero starting index that can only increase.
+
+    Attributes:
+        offset: Index number for the first element in storage.
+    """
 
     def __init__(self, first_packet=1):
         self._offset = first_packet
@@ -60,10 +75,30 @@ class SlidingWindow(object):
         elif j == s:
             self._queue.append(x)
         else:
-            print((i, j, self._offset, [p.packet_no for p in self._queue]))
-            raise IndexError('packet number not in window')
+            raise IndexError('packet number not in window {}'.format(
+                (i, j, self._offset, [p.packet_no for p in self._queue])))
 
 class BaseFlow(object):
+    """Basic functionality for a TCP flow.
+
+    Attributes:
+        env: SimPy environment.
+        id: Flow ID.
+        src: Source host ID.
+        dest: Target host ID.
+        data: Data amount in megabytes.
+        start: Time in seconds when this flow is scheduled to start.
+        num_packets: Total number of packets to be sent.
+        next_packet: simpy.Store object with packets ready for transmission
+            inside.
+        window: SlidingWindow object that keeps track of send packets.
+        cwnd: Congestion window size.
+        timeout: Current timeout setting.
+        base_rtt: Base round-trip time as measured.
+        curr_rtt: The most recent round-trip time.
+        ssthresh: Threshold for Slow Start -> Congestion Avoidance.
+        state: Current state of congestion control.
+    """
 
     _first_packet = 1
 
@@ -150,6 +185,11 @@ class BaseFlow(object):
             self.env.now, self.id, value))
 
     def inc_balance(self, n=1):
+        """Indicates that outstanding packet(s) has been acknowledged.
+
+        Args:
+            n: Number of outstanding acknowledged.
+        """
         if self._cwnd_debt >= n:
             self._cwnd_debt -= n
         elif self._cwnd_debt > 0:
@@ -159,18 +199,22 @@ class BaseFlow(object):
             self._cwnd_balance.put(n)
 
     def make_packet(self, packet_no):
+        """Make a data packet with the given packet number."""
         return DataPacket(
             self.src, self.dest, self.id, packet_no, self.env.now)
 
     def retransmit(self, packet_no):
+        """Retransmit for a packet number."""
         self._ret_packets.append(packet_no)
         self._cwnd_balance.put(1)
 
     def add_alarm(self, packet_no, cur_time, timeout):
+        """Schedule a timeout event."""
         expiration = cur_time + timeout
         heapq.heappush(self._deadlines, (expiration, packet_no, cur_time))
 
     def run_alarm(self):
+        """Reset SimPy process when the list of timeout event is updated"""
         if (self._alarm is not None) and (not self._alarm.processed):
             self._alarm.interrupt()
 
@@ -189,6 +233,7 @@ class BaseFlow(object):
             self._alarm = self.env.process(self.proc_alarm(timeout))
 
     def proc_alarm(self, timeout):
+        """SimPy process for timeout events."""
         try:
             yield self.env.timeout(timeout)
 
@@ -213,6 +258,12 @@ class BaseFlow(object):
             pass
 
     def get_ack(self, ack_no, timestamp):
+        """Handles arrival of AckPacket.
+
+        Args:
+            ack_no: Packet number of AckPacket.
+            timestamp: Time when the corresponding data packet was sent.
+        """
         packet_no = ack_no - 1
         q = self.window
 
@@ -262,6 +313,7 @@ class BaseFlow(object):
             self._state.event_ack(pktt)
 
     def proc_next_packet(self):
+        """SimPy process for making packets ready for transmission."""
         yield self.env.timeout(self.start)
 
         i = self._first_packet
@@ -307,6 +359,12 @@ class BaseFlow(object):
             self.run_alarm()
 
 class FlowState(object):
+    """State controller for congestion control algorithms.
+
+    Attributes:
+        name: Name of congestion control state.
+        context: The Flow object this controller belongs to.
+    """
 
     def __init__(self, context, name):
         self.name = name
@@ -542,8 +600,7 @@ class CubicTCPFlow(BaseFlow):
 
 
 class GoBackNAcker(object):
-    """Used by the client-side of flow to find the ack number.
-    """
+    """Used by the client-side of flow to find the ack number."""
     def __init__(self, first_no=1):
         # All packets with packet_no < expected have been received
         self._expected = first_no
@@ -575,8 +632,7 @@ class GoBackNAcker(object):
             return expected
 
 class ExpDecayTimer(object):
-    """Compute timeout according to round-trip delay.
-    """
+    """Compute timeout according to round-trip delay."""
     def __init__(self, b=0.1, n=4, c=1.25):
         self.b = b
         self.n = n
