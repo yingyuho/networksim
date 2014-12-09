@@ -192,11 +192,12 @@ class BufferedCable(object):
                     self.link_id, 
                     packet.size))
             else:
-                print('{:06f} packet_loss {} {} {}'.format(
-                    self.env.now, 
-                    self.link_id, 
-                    packet.flow_id, 
-                    packet.packet_no))
+                if hasattr(packet, 'flow_id'):
+                    print('{:06f} packet_loss {} {} {}'.format(
+                        self.env.now, 
+                        self.link_id, 
+                        packet.flow_id, 
+                        packet.packet_no))
 
     def _feed_cable(self):
         while True:
