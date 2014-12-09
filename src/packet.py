@@ -7,22 +7,16 @@ import random
 import copy
 
 class Packet(object):
-    """
-    Packet super class
-    """
+    """Base class for all kinds of packets."""
     def __init__(self):
-        """
-        Initiates the super Object for Packet
-        """
+
         super(Packet, self).__init__()
 
     _size = 0
 
     @property
     def size(self):
-        """
-        returns the size of packet in bytes.
-        """
+        """Returns the size of packet in bytes."""
         return self._size
 
     def reach_router(self, router, port_id):
@@ -32,24 +26,21 @@ class Packet(object):
         raise NotImplementedError()
 
 class DataPacket(Packet):
-    """
-    The DataPacket is sent from one host to another.
-    """
+    """Represents data sent from one source to another."""
 
     _size = 1024
 
     payload_size = 1024
 
     def __init__(self, src, dest, flow_id, packet_no, timestamp):
-        """
-        Initiates the DataPacket
+        """Creates a data packet.
 
         Args:
-            src: which host_id the packet starts in.
-            dest: which host_id the packet should end in.
-            flow_id: the ID of the flow that the packet is from.
-            packet_no: the packet number.
-            timestamp: time when the packet was sent
+            src: Host ID of the source.
+            dest: Host ID of the target.
+            flow_id: Flow ID this packet belongs to.
+            packet_no: Packet number.
+            timestamp: Time when the packet was sent.
         """
         super(DataPacket, self).__init__()
         self.src = src
@@ -59,57 +50,47 @@ class DataPacket(Packet):
         self.timestamp = timestamp
 
     def reach_router(self, router, port_id):
-        """
-        When it reaches a router, it goes through the port
-        that has the shortest time.
+        """Visitor method called by Router object.
+
+        Instructs the calling router to forward this data packet to another
+        router or the target host.
 
         Args: 
-            router: the router that the packet arrived to.
-            port_id: the port it came in from.
-
-        Purpose:
-            The packet is sent to through the port into the router.
+            router: The router this packet arrives at.
+            port_id: The port where this packet came in from.
         """
         router.send(self, router.look_up(self.dest))
-        # if self.dest not in router.table:
-        #     router.send_except(self, port_id)
-        # else:
-        #     router.send(self, router.table[self.dest])
+
         
     def reach_host(self, host):
-        """
-        when the packet arrives at the host.
+        """Visitor method called by Host object.
+        
+        Instructs the calling host to acknowledge this data packet.
 
         Args:
-            host: The host that the packet arrived at.
-
-        Purpose:
-            Sends an acknowledge packet back when the host receives the packet
+            host: The host this packet arrives at.
         """
-        # print('{:.6f} : {} -> {} : Dta {}'.format(
-        #     host.env.now, self.src, self.dest, self.packet_no))
+        # Get acknowledgement number
         n = host.get_data(self.flow_id, self.packet_no)
+        # Send AckPacket
         if n is not None:
             host.send_except(AckPacket(
                 self.dest, self.src, self.flow_id, n, self.timestamp))
 
 class AckPacket(Packet):
-    """
-    This packet allows hsots to know their packet was recieved
-    """
+    """Represents acknowledgement of a data packet."""
 
     _size = 64
 
     def __init__(self, src, dest, flow_id, packet_no, timestamp):
-        """
-        Initiates the AckPacket
+        """Creates an acknowledgement.
 
         Args:
-            src: the source of the packet
-            dest: the destination of the packet
-            flow_id: the id of the flow
-            packet_no: the packet number
-            timestamp: time when the original data packet was sent
+            src: Host ID of the source.
+            dest: Host ID of the target.
+            flow_id: Flow ID the data packet belongs to.
+            packet_no: Acknowledgement number.
+            timestamp: Time when the data packet was sent.
         """
         super(AckPacket, self).__init__()
         self.src = src
@@ -119,28 +100,23 @@ class AckPacket(Packet):
         self.timestamp = timestamp
 
     def reach_router(self, router, port_id):
-        """
-        The packet arrived at the router
+        """Visitor method called by Router object.
 
-        Args:
-            router: the router that the packet arrived at.
-            port_id: the port that the packet arrived from
+        Instructs the calling router to forward this ack packet to another
+        router or the source host.
 
-        Purpose: 
-            The packet is sent throught the port specified 
-            by the routing table.
+        Args: 
+            router: The router this packet arrives at.
+            port_id: The port where this packet came in from.
         """
         router.send(self, router.look_up(self.dest))
-        # if self.dest not in router.table:
-        #     router.send_except(self, port_id)
-        # else:
-        #     router.send(self, router.table[self.dest])
 
     def reach_host(self, host):
         host.get_ack(self.flow_id, self.packet_no, self.timestamp)
 
 class SonarPacket(Packet):
-    """
+    """Signal for network exploration using Dijkstra's algorithm.
+
     This SonarPacket is passed around the system
     and keeps track of which port is the best for
     a specific host
@@ -148,26 +124,26 @@ class SonarPacket(Packet):
     _size = 64
 
     def __init__(self, src, version):
-        """
-        Initiates the SonarPacket
+        """Creates a SonarPacket
 
         Attributes:
-        src: The source of the packet
-        version: the version of the packet
+            src: The source host initiating network exploration.
+            version: The round number of dynamic routing.
         """
         super(SonarPacket, self).__init__()
         self.src = src
         self.version = version
 
     def reach_router(self, router, port_id):
-        """
-        Updates the routing table for the router
-        for that specific host if the version ID
-        is greater than the old one.
+        """Visitor method called by Router object.
+
+        For a given source and within the same version, if this SonarPacket 
+        comes first, records <port_id> in reverse routing table and broadcasts 
+        this packet to all directions except <port_id>.
 
         Args: 
-            router: the router it arrived at
-            port_id: The port the packet came in from
+            router: The router this packet arrives at.
+            port_id: The port where this packet came in from.
         """
         src = self.src
         vtable = router.table_version
@@ -178,29 +154,29 @@ class SonarPacket(Packet):
             router.send_except(self, port_id)
 
     def reach_host(self, host):
-        """
-        If it reaches a host, the packet sends an EchoPacket
-        back.
+        """Visitor method called by Host object.
+
+        Sends back an EchoPacket.
 
         Args: 
-            host: The host that the packet arrived at.
+            host: The host this packet arrives at.
         """
         host.send_except(EchoPacket(self.src, host.dev_id, self.version))
 
 class EchoPacket(Packet):
-    """
-    The EchoPacket is sent when a sonar packet arrives to a host.
+    """A candidate target's response to network exploration.
+
+    An EchoPacket is sent when a SonarPacket arrives to a host.
     """
     _size = 64
 
     def __init__(self, src, dest, version):
-        """
-        Initiates an EchoPacket
+        """Initiates an EchoPacket
 
         Attributes:
-            src: Source of packet
-            dest: destination of packet
-            version: version ID
+            src: The source host initiating network exploration.
+            dest: The target host responding to incoming SonarPacket.
+            version: The round number of dynamic routing.
         """
         super(EchoPacket, self).__init__()
         self.src = src
@@ -208,14 +184,15 @@ class EchoPacket(Packet):
         self.version = version
 
     def reach_router(self, router, port_id):
-        """
-        Updates the routing table for the router
-        for that specific host if the version ID
-        is the same as the old one.
+        """Visitor method called by Router object.
+
+        If the version number matches with that of <router>, update the routing 
+        table for <router> and forward this packet back to the source using
+        reverse routing table built by SonarPacket.
 
         Args: 
-            router: the router it arrived at
-            port_id: The port the packet came in from
+            router: The router this packet arrives at.
+            port_id: The port where this packet came in from.
         """
         src = self.src
         vtable = router.table_version
@@ -224,17 +201,25 @@ class EchoPacket(Packet):
             router.send(self, router.table_reverse[src])
 
     def reach_host(self, host):
+        """Visitor method called by Host object.
+
+        The source host ignores EchoPacket.
+
+        Args: 
+            host: Doesn't matter.
+        """
         pass
 
 class RoutingPacket(Packet):
-    """
-    The RoutingPacket is passed around the system to find
-    the fastest path to hosts.
+    """Routing with mixed Dijkstra and Bellman-Ford algorithms.
+
+    The RoutingPacket is passed around the system to find the fastest 
+    path to hosts.
     """
 
     _size = 64
 
-    def __init__(self, start_id, recorded_time, static = False):
+    def __init__(self, start_id, recorded_time, static=False):
         """
         Initiates RoutingPacket
 
@@ -244,6 +229,9 @@ class RoutingPacket(Packet):
             end_id: the host or router ID
             passedTable: the dictionary containing routing table
             passedTimeTable: the dictionary containing the fastest times
+
+        Attributes:
+
         """
         super(RoutingPacket, self).__init__()
         self.start_id = start_id
@@ -254,8 +242,7 @@ class RoutingPacket(Packet):
         self.stat = static
     
     def reach_router(self, router, port_id):
-        """
-        Called when the packet arrives at a router
+        """Visitor method called by Router object.
 
         Args:
             router: the router that the packet arrived at
@@ -288,10 +275,16 @@ class RoutingPacket(Packet):
                         router.timeTable[self.end_id] = self.recorded_time
                 else:
                     for host in self.passedTable:
-                        if host not in router.timeTable or (host in self.passedTimeTable and router.timeTable[host] >= self.passedTimeTable[host] + self.recorded_time):
+                        if host not in router.timeTable or (
+                            host in self.passedTimeTable and 
+                            router.timeTable[host] >= 
+                            (self.passedTimeTable[host] + self.recorded_time)
+                        ):
                             router.table[host] = port_id
                             if host in self.passedTimeTable:
-                                router.timeTable[host] =  self.passedTimeTable[host]+ self.recorded_time
+                                router.timeTable[host] = (
+                                    self.passedTimeTable[host] + 
+                                    self.recorded_time)
                             else:
                                 router.timeTable[host] = self.recorded_time
             else:
@@ -301,8 +294,7 @@ class RoutingPacket(Packet):
                 router.send(self, port_id)
     
     def reach_host(self, host):
-        """
-        Called when the packet reaches a host
+        """Visitor method called by Host object.
 
         Args:
             host: The host that the packet arrived at.
