@@ -1,16 +1,21 @@
+#!/usr/bin/env python
+import sys
+import networkx as nx
+
 from Tkinter import Tk, Label, Button, Text, Scrollbar, BOTH, END, INSERT
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
-from matplotlib.figure import Figure
 import matplotlib
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import (
+    FigureCanvasTkAgg, 
+    NavigationToolbar2TkAgg)
+
 matplotlib.use('TkAgg')
-import networkx as nx
-import sys
 
 '''GUI generator displays a gui that helps you build a network and 
 print it out to a user specified file'''
 class GUIGenerator(object):
-    def __init__(self, fileOutpath):
+    def __init__(self, fileOutpath=sys.stdout):
         '''Initialize and run the gui'''
         #the fileOutpath is the file path of the file we write 
         #the results of the built network to
@@ -242,10 +247,14 @@ class GUIGenerator(object):
             self.flowlistgui.insert(INSERT, flow)
             self.flowlistgui.insert(INSERT, '\n')
             
-    def writeToFile(self, filename):
+    def writeToFile(self, filedesc=sys.stdout):
         '''Writes out the network representation to the file specified
         as an argument'''
-        f=open(filename, mode='w')
+        if isinstance(filedesc, file):
+            f = filedesc
+        else:
+            f = open(filedesc, mode='w')
+
         #write out hosts
         for host in self.hostList:
             f.write(host+'\n')
@@ -257,17 +266,12 @@ class GUIGenerator(object):
         f.write('-\n')
         #writer out edges
         for link in self.edgeList:
-            f.write(" ".join(str(x) for x in list(link))+'\n')
+            f.write(" ".join(map(str, link)) + '\n')
         f.write('-\n')
         #finally write out flows
-        for i in range(0,len(self.flowList)-1):
-            f.write(" ".join(str(x) for x in 
-                             list(self.flowList[i]))+'\n')
-        #we need a seperate command for last line since we dont 
-        #want a stray newline character at the end of the file
-        if(len(self.flowList)>0):
-            f.write(" ".join(str(x) for x in 
-                             list(self.flowList[-1])))
+        for flow in self.flowList:
+            f.write(" ".join(map(str, flow)) + '\n')
+
         f.close()
         #closes out the GUI after generating the network file
         self.root.destroy()
@@ -275,8 +279,7 @@ class GUIGenerator(object):
         sys.exit(0)
         
 if __name__ == '__main__':
-    gui= GUIGenerator('C:\\Users\\neil\\Documents\\juniorFallTerm\\'
-                      'networking\\customNetwork.txt') 
+    gui= GUIGenerator() 
     #call the mainloop of the root to display 
     #the gui and keep it running
     gui.root.mainloop()   
