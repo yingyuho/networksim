@@ -57,6 +57,9 @@ class Device(object):
     def add_port(self, adj_id, port):
         """
         Add and listen to an I/O port to this device.
+
+        Args:
+            adj_id: The adjacent port ID
         """
         if adj_id in self._ports:
             raise Exception('Duplicate port name')
@@ -69,6 +72,10 @@ class Device(object):
     def send(self, packet, to_id):
         """
         Sends packet from the current Device to the other Device.
+
+        Args:
+            Packet: The packet that arrived
+            to_id: the ID to be sent to
         """
         # self._ports[to_id].pipe_out.put(packet)
         self._ports[to_id].receive(packet, self.dev_id)
@@ -76,6 +83,10 @@ class Device(object):
     def send_except(self, packet, except_id=None):
         """
         Sends to all ports except a specified port
+
+        Args:
+            packet: The packet that we need to send
+            except_id: The id we don't want to send to.
         """
         for adj_id in self._ports:
             if except_id is None or adj_id != except_id:
@@ -84,12 +95,17 @@ class Device(object):
     def receive(self, packet, from_id):
         """
         Receives packet for the current Device.
+
+        Args:
+            packet: the packet that we recieved
+            from_id: The ID it came from
         """
         raise NotImplementedError()
 
     def activate_ports(self):
         """
         Activates ports for the current Device.
+
         """
         raise NotImplementedError()
 
