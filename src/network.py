@@ -96,5 +96,32 @@ class Network(object):
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, None, TCPRenoFlow)
-    tc0.run(80)
+    alg_dict = {
+        'tahoe': TCPTahoeFlow,
+        'reno': TCPRenoFlow,
+        'fast': FastTCPFlow,
+        'cubic': CubicTCPFlow
+    }
+
+    usage = ''.join([
+        'Usage: ',
+        '{} sim_time [flow_alg=fast]\n'.format(sys.argv[0]),
+        'flow_alg = {}.\n\n'.format(', '.join(alg_dict))])
+
+    if len(sys.argv) < 2:
+        sys.stderr.write(usage)
+        sys.exit(0)
+
+    try:
+        sim_time = float(sys.argv[1])
+
+        if len(sys.argv) > 2:
+            alg = alg_dict[sys.argv[2]]
+        else:
+            alg = FastTCPFlow
+    except:
+        sys.stderr.write(usage)
+        sys.exit(0)
+
+    sim = Network(None, None, alg)
+    sim.run(sim_time)
