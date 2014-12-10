@@ -36,7 +36,7 @@ def main():
         'link_flow_rate':
             PlotSpec('Link Flow Rate', time_label, 'Mbps', 1),
         'packet_rtt':
-            PlotSpec('Round-trip Delay', time_label, 'Delay (ms)', 1000),
+            PlotSpec('Round-trip Delay', time_label, 'ms', 1000),
         'flow_send_rate':
             PlotSpec('Flow Send Rate', time_label, 'Mbps', 1),
         'host_send_rate':
