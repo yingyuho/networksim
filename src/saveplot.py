@@ -86,9 +86,9 @@ def main():
             plt.plot(data.t, np.array(data.v) * scale, label=i)
             t_auto_max = max(t_auto_max, data.t[-1])
         plt.title(plot_specs[k].title)
-        plt.ylabel(plot_specs[k].xlabel)
+        plt.ylabel(plot_specs[k].ylabel)
         if j == num_subplots - 1:
-            plt.ylabel(plot_specs[k].xlabel)
+            plt.xlabel(plot_specs[k].xlabel)
         else:
             subp.axes.xaxis.set_ticklabels([])
         plt.legend(loc='lower right', numpoints=1)
