@@ -13,10 +13,8 @@ class Device(object):
 
     Attributes:
         env: Simpy environment where the Device is stored.
-        _dev_id: ID of the device.
-        _ports: The ports available on the Device, where other devices are 
-            attached.
-        _max_degree: The maximum number of Devices that can be attached."""
+        dev_id: ID of the device.
+        max_degree: The maximum number of Devices that can be attached."""
 
     def __init__(self, env, dev_id):
         """
@@ -102,13 +100,6 @@ class Device(object):
         """
         raise NotImplementedError()
 
-    def activate_ports(self):
-        """
-        Activates ports for the current Device.
-
-        """
-        raise NotImplementedError()
-
     def init_routing(self):
         """
         Send a routing packet to all the ports.
@@ -132,7 +123,6 @@ class Host(Device):
 
     Attributes:
         flows: A list of the flows that send packets from this Host.
-        _acker: 
     """
 
     _max_degree = 1
@@ -167,9 +157,7 @@ class Host(Device):
         self._flows[flow.id] = flow
 
         def send_packet():
-            """
-            Sends packets according to flow.
-            """
+            """Sends packets according to flow."""
             while True:
                 packet = yield flow.next_packet.get()
                 for adj_id in self._ports:
@@ -217,7 +205,6 @@ class BufferedCable(object):
         rate: Link rate in Mbps.
         delay: Link delay in milliseconds.
         buf_size: Link buffer capacity in bytes.
-        io: 
 
     """
     def __init__(self, link, src_id):
@@ -298,8 +285,6 @@ class Link(Device):
         rate: Link rate in Mbps. Do not modify.
         delay: Link delay in milliseconds. Do not modify.
         buf_size: Link buffer capacity in kilobytes. Do not modify.
-        _cables: 
-
     """
 
     _max_degree = 2
@@ -354,11 +339,10 @@ class Router(Device):
         self.table_forward = {}
 
     def look_up(self, dest):
-        """
-        Looks up destination in table.
+        """Looks up destination in table.
 
         Args:
-            dest: host ID
+            dest: Host ID
         """
         if dest in self.table_forward:
             return self.table_forward[dest]

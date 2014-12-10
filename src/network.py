@@ -2,7 +2,7 @@
 from __future__ import division, print_function
 import simpy
 import os
-from simpy_ext import SizedStore
+import sys
 from device import Host, Link, Router
 from packet import DataPacket
 from flow import TCPTahoeFlow, TCPRenoFlow, FastTCPFlow, CubicTCPFlow
@@ -20,9 +20,11 @@ class Network(object):
         _edges: Contains additional information about each Link.
     """
 
-    def __init__(self, env, filename):
+    def __init__(self, env, filename, algorithm=FastTCPFlow, alg_args=None):
         """Constructor for the Network object"""
         super(Network, self).__init__()
+
+        self.algorithm = algorithm
 
         self.hosts = []
         self.routers = []
@@ -36,18 +38,20 @@ class Network(object):
         if env is None:
             env = simpy.Environment()
         self.env = env
-
         
         self.parse_network(filename)
 
     def parse_network(self, filename):
         """This method parses the network from the provided text file."""
-        curpath = os.path.dirname(__file__)
-        filepath = os.path.abspath(os.path.join(curpath, "..", "testcases", filename))
-        stream = open(filepath,'r')
+        if filename:
+            stream = open(filename, 'r')
+        else:
+            stream = sys.stdin
         sect_idx = 0
         for line in stream:
             fields = line.strip().split()
+            if not fields:
+                continue
             if line[0] == '-':
                 sect_idx += 1
             elif sect_idx == 0:
@@ -67,8 +71,9 @@ class Network(object):
                 self._edges.append((fields[0], fields[2]))
             elif sect_idx == 3:
                 fields[3:4] = map(float, fields[3:5])
-                f = FastTCPFlow(
-                    self.env, fields[0], fields[1], fields[2], fields[3], fields[4])
+                f = self.algorithm(
+                    self.env, 
+                    fields[0], fields[1], fields[2], fields[3], fields[4])
                 self.flows.append(f)
             elif sect_idx == 4:
                 print('# ' + line.strip())
@@ -91,5 +96,5 @@ class Network(object):
     
 
 if __name__ == '__main__':
-    tc0 = Network(None, 'tc1.txt')
-    tc0.run(25)
+    tc0 = Network(None, None, TCPRenoFlow)
+    tc0.run(80)

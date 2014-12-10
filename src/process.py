@@ -146,4 +146,7 @@ def main(freq=5):
                     window_size_sum[name] / window_size_count[name]))
 
 if __name__ == '__main__':
-    main()
+    freq = 5
+    if len(argv) > 1:
+        freq = int(argv[1])
+    main(freq)

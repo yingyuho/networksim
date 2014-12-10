@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 from collections import deque, namedtuple
 from math import ceil
+from sys import stderr
 import heapq
 
 import simpy
@@ -117,6 +118,7 @@ class BaseFlow(object):
 
         self.next_packet = simpy.Store(env)
         self._ret_packets = deque()
+        self._ret_delay_packets = deque()
 
         # Transmit window access control
         self.window = SlidingWindow()
@@ -130,6 +132,7 @@ class BaseFlow(object):
         self._alarm = None
         self._deadlines = []
         self._last_ss = 0.0
+        self.last_window_red = 0
 
         # RTT
         self.base_rtt = 1
@@ -179,7 +182,6 @@ class BaseFlow(object):
                 self._cwnd_balance.put(diff)
         elif value < old:
             self._cwnd_debt += (old - value)
-
         self._cwnd = value
         print('{:.6f} window_size {} {}'.format(
             self.env.now, self.id, value))
@@ -203,10 +205,14 @@ class BaseFlow(object):
         return DataPacket(
             self.src, self.dest, self.id, packet_no, self.env.now)
 
-    def retransmit(self, packet_no):
+    def retransmit(self, packet_no, force=True):
         """Retransmit for a packet number."""
-        self._ret_packets.append(packet_no)
-        self._cwnd_balance.put(1)
+        if force:
+            self._ret_packets.append(packet_no)
+            self._cwnd_balance.put(1)
+        else:
+            self._ret_delay_packets.append(packet_no)
+            self.inc_balance(1)
 
     def add_alarm(self, packet_no, cur_time, timeout):
         """Schedule a timeout event."""
@@ -330,7 +336,16 @@ class BaseFlow(object):
                 pktt = self.window[j]
 
                 if (pktt is None) or (pktt.acked):
-                    break
+                    continue
+
+                retransmit = True
+
+            if not retransmit and self._ret_delay_packets:
+                j = self._ret_delay_packets.popleft()
+                pktt = self.window[j]
+
+                if (pktt is None) or (pktt.acked):
+                    continue
 
                 retransmit = True
 
@@ -339,7 +354,7 @@ class BaseFlow(object):
                     j = i
                     i += 1
                 else:
-                    break
+                    continue
 
             packet = self.make_packet(j)
 
@@ -357,6 +372,18 @@ class BaseFlow(object):
             self.add_alarm(j, t, self.timeout)
 
             self.run_alarm()
+
+    def reduce_window(self, new_cwnd):
+        t = self.env.now
+        if t > self.last_window_red + self.curr_rtt:
+            self.cwnd = 1
+            self.last_window_red = t
+
+    def ret_packet_no(self):
+        if self.last_pkinfo is None:
+            return 1
+        else:
+            return self.last_pkinfo.packet_no + 1
 
 class FlowState(object):
     """State controller for congestion control algorithms.
@@ -386,7 +413,7 @@ class TCPTahoeSS(FlowState):
 
     def event_dupack(self, packet_info, ndup):
         if ndup == 3:
-            self.context.state = 'ret'
+            self.event_timeout(packet_info)
 
     def event_ack(self, packet_info):
         self.context.cwnd += 1
@@ -399,23 +426,29 @@ class TCPTahoeRet(FlowState):
 
     def __init__(self, context, name):
         super(TCPTahoeRet, self).__init__(context, name)
+
         if self.context.last_pkinfo is None:
             self.packet_no = 1
         else:
             self.packet_no = self.context.last_pkinfo.packet_no + 1
-        self.context.ssthresh = max(1, self.context.cwnd / 2)
-        self.context.cwnd = 1
-        self.context.retransmit(self.packet_no)
+        context.ssthresh = max(1, self.context.cwnd / 2)
+        context.retransmit(self.packet_no)
+        context.cwnd = 1
+        context.last_window_red = context.env.now
+        self.start_time = context.env.now
 
     def event_timeout(self, packet_info):
+        self.context.cwnd = 1
         self.context.retransmit(packet_info.packet_no)
 
     def event_dupack(self, packet_info, ndup):
         pass
 
     def event_ack(self, packet_info):
-        self.context.cwnd += 1
-        self.context.state = 'ss'
+        cont = self.context
+        cont.cwnd += 1
+        if cont.env.now > cont.last_window_red + cont.curr_rtt:
+            cont.state = 'ss'
 
 class TCPTahoeCA(TCPTahoeSS):
 
@@ -442,7 +475,7 @@ class TCPRenoSS(FlowState):
 
     def event_dupack(self, packet_info, ndup):
         if ndup >= 3:
-            self.context.state = 'frfr'
+            self.context.state = 'ret'
 
     def event_ack(self, packet_info):
         self.context.cwnd += 1
@@ -466,19 +499,21 @@ class TCPRenoFRFR(FlowState):
         self.context.ssthresh = max(1, self.context.cwnd / 2)
         self.context.cwnd = self.context.ssthresh + 3
         self.context.retransmit(self.packet_no)
+        context.last_window_red = context.env.now
 
     def event_timeout(self, packet_info):
         if packet_info.timestamp >= self.start_time:
             self.context.state = 'ret'
         else:
-            self.context.retransmit(packet_info.packet_no)
+            self.context.retransmit(packet_info.packet_no, force=False)
 
     def event_dupack(self, packet_info, ndup):
         self.context.cwnd += 1
 
     def event_ack(self, packet_info):
-        self.context.cwnd = self.context.ssthresh
-        self.context.state = 'ca'
+        cont = self.context
+        cont.cwnd = cont.ssthresh
+        cont.state = 'ca'
 
 class TCPRenoFlow(BaseFlow):
 
@@ -513,7 +548,7 @@ class FastTCPCA(TCPRenoSS):
         # Exp decay factor
         gamma = 0.05
         # Desired number of packets in buffer
-        alpha = 3
+        alpha = 10
         
         ratio = cont.base_rtt / cont.curr_rtt
         new_cwnd = (1 - gamma) * cwnd + gamma * (ratio * cwnd + alpha)
@@ -541,32 +576,33 @@ class FastTCPFlow(BaseFlow):
 
 class CubicTCPCA(TCPRenoSS):
 
+    def event_timeout(self, packet_info):
+        cont = self.context
+        cont.last_reduc_t = cont.env.now
+        cont.last_reduc = cont.cwnd
+        super(CubicTCPCA, self).event_timeout(packet_info)
+
+    def event_dupack(self, packet_info, ndup):
+        cont = self.context
+        cont.last_reduc_t = cont.env.now
+        cont.last_reduc = cont.cwnd
+        super(CubicTCPCA, self).event_dupack(packet_info, ndup)
+
     def event_ack(self, packet_info):
 
         cont = self.context
 
         # Current window size, before update
-        cur_cwnd = cont.cwnd
 
-        Wmax = cont.before_last_reduc
+        Wmax = cont.last_reduc
         C = cont.C
         beta = cont.beta
 
-        K = (Wmax * beta/C)**(1/3.0)
+        K = (Wmax * beta / C) ** (1 / 3.0)
 
         t = cont.env.now - cont.last_reduc_t
 
-        cont.cwnd = C * (t - K) ** 3 + Wmax
-
-        # Update is a reduction
-        if cont.cwnd < cur_cwnd:
-            cont.last_reduc_t = cont.env.now
-            if cont.before_last_reduc == cont.last_reduc:
-                cont.last_reduc = cont.cwnd
-            else:
-                cont.before_last_reduc = cont.last_reduc
-                cont.last_reduc = cont.cwnd
-
+        cont.cwnd = max(1, C * (t - K) ** 3 + Wmax)
 
 
 class CubicTCPFlow(BaseFlow):
@@ -585,14 +621,14 @@ class CubicTCPFlow(BaseFlow):
         # Scaling factor for window update
         self.C = .4
         # multiplication decrease factor applied for window reduction at the time of loss event
-        self.beta = .8
+        self.beta = .2
 
         ## Variables
         # Last window reduction time
         self.last_reduc_t = 0
 
         # Window size before last reduction
-        self.before_last_reduc = self.cwnd
+        # self.before_last_reduc = self.cwnd
         self.last_reduc = self.cwnd
 
 
@@ -633,7 +669,7 @@ class GoBackNAcker(object):
 
 class ExpDecayTimer(object):
     """Compute timeout according to round-trip delay."""
-    def __init__(self, b=0.1, n=4, c=1.25):
+    def __init__(self, b=0.1, n=4, c=2.0):
         self.b = b
         self.n = n
         self.a = None
