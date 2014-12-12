@@ -357,6 +357,7 @@ class BaseFlow(object):
             self.inc_balance(max(1, bal_inc))
 
     def go_back(self, packet_no=None):
+        """Rewinds the window for retransmission."""
         old_cur = self.packet_cursor
         if packet_no is None:
             self.packet_cursor = self.window.offset
@@ -366,6 +367,7 @@ class BaseFlow(object):
         self.run_alarm()
 
     def done(self):
+        """Stops making packets."""
         self._finished = True
         for proc in [self._main_proc, self._alarm]:
             if (proc is not None) and (not proc.processed):
@@ -449,6 +451,7 @@ class TCPTahoeSS(FlowState):
         super(TCPTahoeSS, self).__init__(context, name)
 
     def event_timeout(self, packet_info):
+        """Handles timeout for TCP Tahoe Slow Start."""
         cont = self.context
 
         if packet_info.timestamp >= self.start_time:
@@ -460,10 +463,12 @@ class TCPTahoeSS(FlowState):
         self.context.state = 'ss'
 
     def event_dupack(self, packet_info, ndup):
+        """Handles 3 dup ack for TCP Tahoe Slow Start."""
         if ndup == 3:
             self.event_timeout(packet_info)
 
     def event_ack(self, packet_info):
+        """Updates window size for TCP Tahoe Slow Start."""
         if packet_info.timestamp >= self.start_time:
             self.context.cwnd += 1
 
@@ -471,33 +476,10 @@ class TCPTahoeSS(FlowState):
             self.context.cwnd >= self.context.ssthresh):
             self.context.state = 'ca'
 
-class TCPTahoeRet(FlowState):
-
-    def __init__(self, context, name):
-        super(TCPTahoeRet, self).__init__(context, name)
-        cont = self.context
-        self.target_no = cont.packet_cursor
-        cont.go_back()
-        # cont.cwnd = 1
-        # cont.zero_debt()
-        # cont.inc_balance()
-
-    def event_timeout(self, packet_info):
-        self.target_no = max(self.target_no, packet_info.packet_no)
-
-    def event_dupack(self, packet_info, ndup):
-        if ndup == 3:
-            self.event_timeout(packet_info)
-
-    def event_ack(self, packet_info):
-        self.context.cwnd += 1
-        if packet_info.packet_no >= self.target_no:
-            # self.context.cwnd = 1
-            self.context.state = 'ss'
-
 class TCPTahoeCA(TCPTahoeSS):
 
     def event_ack(self, packet_info):
+        """Updates window size for TCP Tahoe Congestion Avoidance."""
         self.context.cwnd += 1 / self.context.cwnd
 
 class TCPTahoeFlow(BaseFlow):
@@ -515,6 +497,7 @@ class TCPTahoeFlow(BaseFlow):
 class TCPRenoSS(TCPTahoeSS):
 
     def event_dupack(self, packet_info, ndup):
+        """Handles 3 dup ack for TCP Reno Slow Start."""
         cont = self.context
         if ndup >= 3:
             if packet_info.timestamp >= self.start_time:
@@ -529,6 +512,7 @@ class TCPRenoSS(TCPTahoeSS):
 class TCPRenoCA(TCPRenoSS):
 
     def event_ack(self, packet_info):
+        """Updates window size for TCP Reno Congestion Avoidance."""
         self.context.cwnd += 1 / self.context.cwnd
 
 class TCPRenoFRFR(FlowState):
@@ -538,6 +522,7 @@ class TCPRenoFRFR(FlowState):
         self.timeout_no = 0
 
     def event_timeout(self, packet_info):
+        """Handles timeout for TCP Reno FR/FR."""
         cont = self.context
         
         if packet_info.timestamp >= self.start_time:
@@ -548,9 +533,11 @@ class TCPRenoFRFR(FlowState):
             self.timeout_no = max(self.timeout_no, packet_info.packet_no)
 
     def event_dupack(self, packet_info, ndup):
+        """Handles 3 dup ack for TCP Reno FR/FR."""
         self.context.cwnd += 1
 
     def event_ack(self, packet_info):
+        """Updates window size for TCP Reno FR/FR."""
         cont = self.context
         if packet_info.packet_no >= self.timeout_no:
             cont.cwnd = cont.ssthresh
@@ -576,6 +563,7 @@ class TCPRenoFlow(BaseFlow):
 class FastTCPCA(TCPRenoSS):
 
     def event_ack(self, packet_info):
+        """Updates window size for FAST-TCP Congestion Avoidance."""
         cont = self.context
 
         cwnd = cont.cwnd
@@ -617,65 +605,60 @@ class FastTCPFlow(BaseFlow):
         # Calculated queue delay
         self.queue_delay = 0
 
-class CubicTCPCA(TCPRenoSS):
+class CubicTCPSS(TCPRenoSS):
+
+    def __init__(self, context, name):
+        super(CubicTCPSS, self).__init__(context, name)
+        if context.ssthresh is not None:
+            context.w_max = context.ssthresh * 2
+        context.cubic_thresh = context.w_max * (1 - context.beta)
 
     def event_ack(self, packet_info):
+        """Updates window size for CUBIC-TCP Slow Start."""
+        if packet_info.timestamp >= self.start_time:
+            self.context.cwnd += 1
+
+        if self.context.cwnd >= self.context.cubic_thresh:
+            self.context.state = 'ca'
+
+class CubicTCPCA(CubicTCPSS):
+
+    def event_ack(self, packet_info):
+        """Updates window size for CUBIC-TCP Congestion Avoidance."""
 
         cont = self.context
 
         # Current window size, before update
         cur_cwnd = cont.cwnd
 
-        Wmax = cont.before_last_reduc
-        C = cont.C
+        w_max = cont.w_max
+        c = cont.c
         beta = cont.beta
 
-        K = (Wmax * beta/C)**(1/3.0)
+        k = (w_max * beta / c) ** (1 / 3.0)
 
-        t = cont.env.now - cont.last_reduc_t
+        t = cont.env.now - self.start_time
 
-        cont.cwnd = C * (t - K) ** 3 + Wmax
-
-        # Update is a reduction
-        if cont.cwnd < cur_cwnd:
-            cont.last_reduc_t = cont.env.now
-            if cont.before_last_reduc == cont.last_reduc:
-                cont.last_reduc = cont.cwnd
-            else:
-                cont.before_last_reduc = cont.last_reduc
-                cont.last_reduc = cont.cwnd
-
-
+        cont.cwnd = max(1, c * (t - k) ** 3 + w_max)
 
 class CubicTCPFlow(BaseFlow):
     def __init__(self, env, flow_id, src_id, dest_id, data_mb, start_s):
         states = {
-            'ss':   TCPRenoSS,
+            'ss':   CubicTCPSS,
             'ca':   CubicTCPCA,
-            'ret':  TCPTahoeRet,
             'frfr': TCPRenoFRFR }
+
+        # Constants
+        # Scaling factor for window update
+        self.c = .4
+        # multiplication decrease factor at the time of loss event
+        self.beta = .8
+
+        self.w_max = 160
 
         super(CubicTCPFlow, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s,
             states, 'ss')
-
-        ## Constants
-        # Scaling factor for window update
-        self.C = .4
-        # multiplication decrease factor applied for window reduction at the time of loss event
-        self.beta = .8
-
-        ## Variables
-        # Last window reduction time
-        self.last_reduc_t = 0
-
-        # Window size before last reduction
-        self.before_last_reduc = self.cwnd
-        self.last_reduc = self.cwnd
-
-
-
-
 
 class SelectiveReceiver(object):
     """Used by the client-side of flow to find the ack number."""
