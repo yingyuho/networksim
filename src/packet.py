@@ -74,8 +74,12 @@ class DataPacket(Packet):
         n = host.get_data(self.flow_id, self.packet_no)
         # Send AckPacket
         if n is not None:
+            if n > self.packet_no:
+                timestamp = self.timestamp
+            else:
+                timestamp = None
             host.send_except(AckPacket(
-                self.dest, self.src, self.flow_id, n, self.timestamp))
+                self.dest, self.src, self.flow_id, n, timestamp))
 
 class AckPacket(Packet):
     """Represents acknowledgement of a data packet."""

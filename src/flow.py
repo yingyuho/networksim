@@ -13,18 +13,17 @@ class PacketRecord(object):
     Attributes:
         packet_no: Packet number starting from 1.
         timestamp: Time when this packet was sent.
-        expiration: Deadline when a timeout event would be triggered.
         acked: Whether this packet has been acknowledged.
         retransmit: Whether this packet is a retransmitted one.
     """
 
     def __init__(
-        self, packet_no, timestamp, expiration, 
+        self, packet_no, timestamp, 
         acked=False, retransmit=False
     ):
         self.packet_no = packet_no
         self.timestamp = timestamp
-        self.expiration = expiration
+        # self.expiration = expiration
         self.acked = acked
         self.retransmit = retransmit
 
@@ -40,6 +39,9 @@ class SlidingWindow(object):
     def __init__(self, first_packet=1):
         self._offset = first_packet
         self._queue = deque()
+
+    def __len__(self):
+        return len(self._queue)
 
     @property
     def offset(self):
@@ -100,8 +102,6 @@ class BaseFlow(object):
         state: Current state of congestion control.
     """
 
-    _first_packet = 1
-
     def __init__(
         self, env, flow_id, src_id, dest_id, data_mb, start_s, 
         state_constr, init_state):
@@ -117,16 +117,20 @@ class BaseFlow(object):
 
         self.next_packet = simpy.Store(env)
         self._ret_packets = deque()
+        self._packet_start = 1
+        self._packet_end = self._packet_start + self.num_packets
+        self.packet_cursor = self._packet_start
 
         # Transmit window access control
         self.window = SlidingWindow()
         self._cwnd = 1
+        self._cwnd_frac = 0.0
         self._cwnd_balance = simpy.Container(env, init=self._cwnd)
         self._cwnd_debt = 0
 
         # Timeout
         self.timeout = 1.0
-        self._timer = ExpDecayTimer()
+        self._timer = JKTimer()
         self._alarm = None
         self._deadlines = []
         self._last_ss = 0.0
@@ -140,12 +144,24 @@ class BaseFlow(object):
         self._ndup = 0
 
         # State
-        self.ssthresh = None
+        self._ssthresh = None
         self._state_constr = state_constr
+        self._state = None
         self.state = init_state
 
         # Activate main process
-        self.env.process(self.proc_next_packet())
+        self._main_proc = self.env.process(self.proc_next_packet())
+        self._finished = False
+
+    @property
+    def ssthresh(self):
+        return self._ssthresh
+    @ssthresh.setter
+    def ssthresh(self, value):
+        self._ssthresh = value
+        print('{:.6f} ssthresh {} {:.3f}'.format(
+            self.env.now, self.id, value))
+    
 
     @property
     def state(self):
@@ -155,34 +171,44 @@ class BaseFlow(object):
             return None
     @state.setter
     def state(self, value):
+        if self._state is not None:
+            print('{:.6f} state {} {}'.format(
+                self.env.now, self.id, value))
         self._state = self._state_constr[value](self, value)
-        # print('{:.6f} state {} {}'.format(
-        #     self.env.now, self.id, value))
     
     @property
     def cwnd(self):
         """Congestion window."""
-        return self._cwnd
+        return self._cwnd + self._cwnd_frac
     @cwnd.setter
     def cwnd(self, value):
+
+        if value < 1:
+            raise ValueError('Attempt to set cwnd < 1')
+
+        self._cwnd_frac = value - int(value)
+
+        value = int(value)
+
         old = self._cwnd
 
-        if value > old:
-            diff = value - old
-            transfer = min(value - old, self._cwnd_debt)
-            if self._cwnd_debt >= diff:
-                self._cwnd_debt -= diff
-            elif self._cwnd_debt > 0:
-                self._cwnd_balance.put(diff - self._cwnd_debt)
-                self._cwnd_debt = 0
-            else:
-                self._cwnd_balance.put(diff)
-        elif value < old:
-            self._cwnd_debt += (old - value)
+        income = value - old
+
+        if income > 0:
+            repayment = min(income, self._cwnd_debt)
+            saving = income - repayment
+            self._cwnd_debt -= repayment
+            if saving > 0:
+                self._cwnd_balance.put(saving)
+        else:
+            self._cwnd_debt -= income
 
         self._cwnd = value
-        print('{:.6f} window_size {} {}'.format(
-            self.env.now, self.id, value))
+
+        print('{:.6f} window_size {} {:.3f}'.format(
+            self.env.now, self.id, value + self._cwnd_frac))
+        # print('{:f} balance {} {}'.format(
+        #     self.env.now, self.id, self._cwnd_balance._level))
 
     def inc_balance(self, n=1):
         """Indicates that outstanding packet(s) has been acknowledged.
@@ -190,6 +216,7 @@ class BaseFlow(object):
         Args:
             n: Number of outstanding acknowledged.
         """
+        n = int(n)
         if self._cwnd_debt >= n:
             self._cwnd_debt -= n
         elif self._cwnd_debt > 0:
@@ -197,6 +224,9 @@ class BaseFlow(object):
             self._cwnd_debt = 0
         else:
             self._cwnd_balance.put(n)
+
+    def zero_debt(self):
+        self._cwnd_debt = 0
 
     def make_packet(self, packet_no):
         """Make a data packet with the given packet number."""
@@ -223,7 +253,7 @@ class BaseFlow(object):
             pktt = self.window[d[0][1]]
             if pktt:
                 assert pktt.packet_no == d[0][1]
-            if pktt is None or pktt.acked:
+            if pktt is None or pktt.packet_no >= self.packet_cursor:
                 heapq.heappop(d)
             else:
                 break
@@ -264,6 +294,15 @@ class BaseFlow(object):
             ack_no: Packet number of AckPacket.
             timestamp: Time when the corresponding data packet was sent.
         """
+
+        if self._finished:
+            return
+
+        if ack_no == self._packet_end:
+            print('{:06f} finish {}'.format(self.env.now, self.id))
+            self.done()
+            return
+
         packet_no = ack_no - 1
         q = self.window
 
@@ -273,8 +312,9 @@ class BaseFlow(object):
             if packet_no == self.last_pkinfo.packet_no:
                 # Dup ack
                 self._ndup += 1
-                print('{:06f} dupack {}'.format(self.env.now, ack_no))
-                self._state.event_dupack(self.last_pkinfo, self._ndup)
+                print('{:06f} dupack {} {}'.format(
+                    self.env.now, ack_no, q[ack_no].timestamp))
+                self._state.event_dupack(q[ack_no], self._ndup)
             return
         else:
             # Normal ack
@@ -290,8 +330,9 @@ class BaseFlow(object):
             pktt.acked = True
 
             # Update timeout
-            pktt.timestamp = timestamp
-            delay = self.env.now - timestamp
+            if timestamp is not None:
+                pktt.timestamp = timestamp
+            delay = self.env.now - pktt.timestamp
             print('{:.6f} packet_rtt {} {}'.format(
                 self.env.now, self.id, delay))
             self.timeout = self._timer(delay)
@@ -302,25 +343,43 @@ class BaseFlow(object):
                 self.base_rtt = delay
 
             # Shift transmission window
-            pdiff = packet_no - expected + 1
+            # pdiff = min(packet_no - expected + 1, len(q))
 
-            self.inc_balance(pdiff)
-            q.offset += pdiff
+            q.offset = packet_no + 1
 
             # Reset alarm
             self.run_alarm()
 
             self._state.event_ack(pktt)
 
+            bal_inc = min(packet_no + 1, self.packet_cursor) - expected
+
+            self.inc_balance(max(1, bal_inc))
+
+    def go_back(self, packet_no=None):
+        old_cur = self.packet_cursor
+        if packet_no is None:
+            self.packet_cursor = self.window.offset
+        else:
+            self.packet_cursor = packet_no
+        self.inc_balance(old_cur - self.packet_cursor)
+        self.run_alarm()
+
+    def done(self):
+        self._finished = True
+        for proc in [self._main_proc, self._alarm]:
+            if (proc is not None) and (not proc.processed):
+                proc.interrupt()
+
     def proc_next_packet(self):
         """SimPy process for making packets ready for transmission."""
         yield self.env.timeout(self.start)
 
-        i = self._first_packet
-        end = i + self.num_packets
-
         while True:
-            yield self._cwnd_balance.get(1)
+            try:
+                yield self._cwnd_balance.get(1)
+            except simpy.Interrupt:
+                break
 
             j = None
             retransmit = False
@@ -329,17 +388,16 @@ class BaseFlow(object):
                 j = self._ret_packets.popleft()
                 pktt = self.window[j]
 
-                if (pktt is None) or (pktt.acked):
-                    break
+                if pktt is None:
+                    continue
 
                 retransmit = True
 
             if not retransmit:
-                if i < end:
-                    j = i
-                    i += 1
-                else:
-                    break
+                j = i = max(self.packet_cursor, self.window.offset)
+                if i >= self._packet_end:
+                    continue
+                self.packet_cursor = i + 1
 
             packet = self.make_packet(j)
 
@@ -349,10 +407,15 @@ class BaseFlow(object):
                 print('{:.6f} retransmit {} {}'.format(
                     self.env.now, self.id, j))
 
-            self.window[j] = PacketRecord(
-                j, t, t + self.timeout, False, retransmit)
+            if self.window[j] is None:
+                self.window[j] = PacketRecord(j, t, False, retransmit)
+            else:
+                self.window[j].retransmit = retransmit
 
-            yield self.next_packet.put(packet)
+            try:
+                yield self.next_packet.put(packet)
+            except simpy.Interrupt:
+                break
 
             self.add_alarm(j, t, self.timeout)
 
@@ -369,6 +432,7 @@ class FlowState(object):
     def __init__(self, context, name):
         self.name = name
         self.context = context
+        self.start_time = self.context.env.now
 
     def event_timeout(self, packet_info):
         raise NotImplementedError()
@@ -381,15 +445,27 @@ class FlowState(object):
 
 class TCPTahoeSS(FlowState):
 
+    def __init__(self, context, name):
+        super(TCPTahoeSS, self).__init__(context, name)
+
     def event_timeout(self, packet_info):
-        self.context.state = 'ret'
+        cont = self.context
+
+        if packet_info.timestamp >= self.start_time:
+            cont.ssthresh = max(1, cont.cwnd / 2)
+
+        cont.cwnd = 1
+        cont.go_back()
+
+        self.context.state = 'ss'
 
     def event_dupack(self, packet_info, ndup):
         if ndup == 3:
-            self.context.state = 'ret'
+            self.event_timeout(packet_info)
 
     def event_ack(self, packet_info):
-        self.context.cwnd += 1
+        if packet_info.timestamp >= self.start_time:
+            self.context.cwnd += 1
 
         if (self.context.ssthresh is not None and 
             self.context.cwnd >= self.context.ssthresh):
@@ -399,23 +475,25 @@ class TCPTahoeRet(FlowState):
 
     def __init__(self, context, name):
         super(TCPTahoeRet, self).__init__(context, name)
-        if self.context.last_pkinfo is None:
-            self.packet_no = 1
-        else:
-            self.packet_no = self.context.last_pkinfo.packet_no + 1
-        self.context.ssthresh = max(1, self.context.cwnd / 2)
-        self.context.cwnd = 1
-        self.context.retransmit(self.packet_no)
+        cont = self.context
+        self.target_no = cont.packet_cursor
+        cont.go_back()
+        # cont.cwnd = 1
+        # cont.zero_debt()
+        # cont.inc_balance()
 
     def event_timeout(self, packet_info):
-        self.context.retransmit(packet_info.packet_no)
+        self.target_no = max(self.target_no, packet_info.packet_no)
 
     def event_dupack(self, packet_info, ndup):
-        pass
+        if ndup == 3:
+            self.event_timeout(packet_info)
 
     def event_ack(self, packet_info):
         self.context.cwnd += 1
-        self.context.state = 'ss'
+        if packet_info.packet_no >= self.target_no:
+            # self.context.cwnd = 1
+            self.context.state = 'ss'
 
 class TCPTahoeCA(TCPTahoeSS):
 
@@ -428,28 +506,25 @@ class TCPTahoeFlow(BaseFlow):
 
         states = {
             'ss':   TCPTahoeSS,
-            'ca':   TCPTahoeCA,
-            'ret':  TCPTahoeRet }
+            'ca':   TCPTahoeCA }
 
         super(TCPTahoeFlow, self).__init__(
             env, flow_id, src_id, dest_id, data_mb, start_s,
             states, 'ss')
 
-class TCPRenoSS(FlowState):
-
-    def event_timeout(self, packet_info):
-        self.context.state = 'ret'
+class TCPRenoSS(TCPTahoeSS):
 
     def event_dupack(self, packet_info, ndup):
+        cont = self.context
         if ndup >= 3:
-            self.context.state = 'frfr'
-
-    def event_ack(self, packet_info):
-        self.context.cwnd += 1
-
-        if (self.context.ssthresh is not None and 
-            self.context.cwnd >= self.context.ssthresh):
-            self.context.state = 'ca'
+            if packet_info.timestamp >= self.start_time:
+                cont.ssthresh = max(1, cont.cwnd / 2)
+            if cont.ssthresh is not None:
+                cont.cwnd = cont.ssthresh + ndup
+            else:
+                cont.cwnd = 1
+            cont.retransmit(packet_info.packet_no)
+            cont.state = 'frfr'
 
 class TCPRenoCA(TCPRenoSS):
 
@@ -460,25 +535,30 @@ class TCPRenoFRFR(FlowState):
 
     def __init__(self, context, name):
         super(TCPRenoFRFR, self).__init__(context, name)
-        self.start_time = self.context.env.now
-        self.packet_no = self.context.last_pkinfo.packet_no + 1
-
-        self.context.ssthresh = max(1, self.context.cwnd / 2)
-        self.context.cwnd = self.context.ssthresh + 3
-        self.context.retransmit(self.packet_no)
+        self.timeout_no = 0
 
     def event_timeout(self, packet_info):
+        cont = self.context
+        
         if packet_info.timestamp >= self.start_time:
-            self.context.state = 'ret'
+            cont.cwnd = 1
+            cont.go_back()
+            cont.state = 'ss'
         else:
-            self.context.retransmit(packet_info.packet_no)
+            self.timeout_no = max(self.timeout_no, packet_info.packet_no)
 
     def event_dupack(self, packet_info, ndup):
         self.context.cwnd += 1
 
     def event_ack(self, packet_info):
-        self.context.cwnd = self.context.ssthresh
-        self.context.state = 'ca'
+        cont = self.context
+        if packet_info.packet_no >= self.timeout_no:
+            cont.cwnd = cont.ssthresh
+            cont.state = 'ca'
+        else:
+            cont.cwnd = 1
+            cont.go_back()
+            cont.state = 'ss'
 
 class TCPRenoFlow(BaseFlow):
 
@@ -487,7 +567,6 @@ class TCPRenoFlow(BaseFlow):
         states = {
             'ss':   TCPRenoSS,
             'ca':   TCPRenoCA,
-            'ret':  TCPTahoeRet,
             'frfr': TCPRenoFRFR }
 
         super(TCPRenoFlow, self).__init__(
@@ -526,7 +605,6 @@ class FastTCPFlow(BaseFlow):
         states = {
             'ss':   FastTCPCA,
             'ca':   FastTCPCA,
-            'ret':  TCPTahoeRet,
             'frfr': TCPRenoFRFR }
 
         super(FastTCPFlow, self).__init__(
@@ -599,7 +677,7 @@ class CubicTCPFlow(BaseFlow):
 
 
 
-class GoBackNAcker(object):
+class SelectiveReceiver(object):
     """Used by the client-side of flow to find the ack number."""
     def __init__(self, first_no=1):
         # All packets with packet_no < expected have been received
@@ -631,8 +709,8 @@ class GoBackNAcker(object):
             self._expected = expected
             return expected
 
-class ExpDecayTimer(object):
-    """Compute timeout according to round-trip delay."""
+class JKTimer(object):
+    """Compute timeout using Jacobson/Karels Algorithm."""
     def __init__(self, b=0.1, n=4, c=1.25):
         self.b = b
         self.n = n

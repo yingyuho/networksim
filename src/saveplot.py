@@ -3,6 +3,8 @@ import sys
 from collections import namedtuple, OrderedDict, defaultdict
 
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 PlotSpec = namedtuple('PlotSpec', 'title xlabel ylabel scale')

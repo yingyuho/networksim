@@ -5,8 +5,8 @@ from operator import attrgetter
 
 import simpy
 
-from flow import GoBackNAcker
-from packet import RoutingPacket, SonarPacket
+from flow import SelectiveReceiver
+from packet import RoutingPacket, SonarPacket, DataPacket
 
 class Device(object):
     """Superclass for Host, Router, and Link.
@@ -137,7 +137,9 @@ class Host(Device):
         """
         super(Host, self).__init__(env, dev_id)
         self._flows = {}
-        self._acker = defaultdict(GoBackNAcker)
+        self._acker = defaultdict(SelectiveReceiver)
+        self._ack_n = defaultdict(int)
+        self._ack_timestamp = defaultdict(float)
         self.env.process(self.proc_routing())
 
     def receive(self, packet, from_id):
@@ -178,7 +180,7 @@ class Host(Device):
         n = self._acker[flow_id](packet_no)
         if n is not None:
             print('{:.6f} send_ack {} {} {}'.format(
-                self.env.now, flow_id, self.dev_id, packet_no))
+                self.env.now, flow_id, self.dev_id, n))
         return n
 
     def get_ack(self, flow_id, packet_no, timestamp):
