@@ -75,7 +75,6 @@ class Device(object):
             Packet: The packet that arrived
             to_id: the ID to be sent to
         """
-        # self._ports[to_id].pipe_out.put(packet)
         self._ports[to_id].receive(packet, self.dev_id)
 
     def send_except(self, packet, except_id=None):
@@ -109,6 +108,7 @@ class Device(object):
             rp = RoutingPacket(self.dev_id, self.env.now)
             self.send_except(rp)
             yield self.env.timeout(5)
+            
     def init_static_routing(self):
         """
         Send a routing packet to all the ports.
